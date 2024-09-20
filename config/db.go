@@ -1,10 +1,11 @@
 package config
 
 import (
+	"fmt"
 	"github.com/gorilla/sessions"
 	"github.com/jinzhu/gorm"
 	_ "github.com/jinzhu/gorm/dialects/postgres"
-	"log"
+	"os"
 )
 
 var (
@@ -13,11 +14,13 @@ var (
 )
 
 func InitDB() {
-	var err error
-	dsn := "host=localhost user=postgres password=20030625 dbname=hired_valley sslmode=disable"
-	DB, err = gorm.Open("postgres", dsn)
-	if err != nil {
-		log.Fatal("Failed to connect to database:", err)
-	}
-	log.Println("Database connection established")
+	var _ error
+
+	dsn := fmt.Sprintf("host=%s user=%s password=%s dbname=%s sslmode=disable",
+		os.Getenv("DB_HOST"),
+		os.Getenv("DB_USER"),
+		os.Getenv("DB_PASSWORD"),
+		os.Getenv("DB_NAME"))
+	DB, _ = gorm.Open("postgres", dsn)
+
 }

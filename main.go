@@ -26,7 +26,7 @@ func main() {
 	config.DB.AutoMigrate(&models.GoogleUser{}, &models.User{}) // Автоматическая миграция моделей
 
 	// Настройка маршрутов
-	http.HandleFunc("/", handleHome)
+	http.HandleFunc("/", Handler)
 	http.HandleFunc("/login/google", controllers.HandleGoogleLogin)
 	http.HandleFunc("/callback/google", controllers.HandleGoogleCallback)
 	http.HandleFunc("/register", controllers.Register)
@@ -62,4 +62,8 @@ func handleHome(w http.ResponseWriter, r *http.Request) {
                  </body></html>`
 		fmt.Fprint(w, html)
 	}
+}
+
+func Handler(w http.ResponseWriter, r *http.Request) {
+	fmt.Fprintf(w, "Hello from Vercel with Go!")
 }

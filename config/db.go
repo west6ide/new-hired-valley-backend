@@ -14,7 +14,7 @@ var (
 
 func InitDB() {
 	var err error
-	dsn := "host=localhost user=postgres password=20030625 dbname=hired_valley sslmode=disable"
+	dsn := "host=dpg-cro07388fa8c738lmgng-a user=db password=8moWFtexXkL3DAmI2C3PFGqXjQv0G8jc dbname=hired_valley sslmode=disable"
 	DB, err = gorm.Open("postgres", dsn)
 	if err != nil {
 		log.Fatal("Failed to connect to database:", err)

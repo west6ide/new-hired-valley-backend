@@ -1,10 +1,11 @@
 package config
 
 import (
+	"fmt"
 	"github.com/gorilla/sessions"
-	"github.com/jinzhu/gorm"
-	_ "github.com/jinzhu/gorm/dialects/postgres"
-	"log"
+	"gorm.io/driver/postgres"
+	"gorm.io/gorm"
+	"os"
 )
 
 var (
@@ -13,12 +14,16 @@ var (
 )
 
 func InitDB() {
+	dsn := os.Getenv("DATABASE_URL") // Получение URL базы данных из переменной окружения
 	var err error
-	dsn := "host=dpg-cro07388fa8c738lmgng-a user=db password=8moWFtexXkL3DAmI2C3PFGqXjQv0G8jc dbname=hired_valley sslmode=disable"
-	DB, err = gorm.Open("postgres", dsn)
+	DB, err = gorm.Open(
+		postgres.Open(dsn),
+		&gorm.Config{},
+	)
 	if err != nil {
-		log.Fatal("Failed to connect to database:", err)
+		fmt.Println("Не удалось подключиться к базе данных:", err)
+		panic("Соединение с базой данных не установлено")
 	}
-	log.Println("Database connection established")
+	fmt.Println("Соединение с базой данных успешно")
 
 }

@@ -13,14 +13,14 @@ import (
 )
 
 var googleOauthConfig = &oauth2.Config{
-	RedirectURL:  os.Getenv("GOOGLE_REDIRECT_URL"), // Используем переменную окружения для URL callback
+	RedirectURL:  os.Getenv("GOOGLE_REDIRECT_URL"),
 	ClientID:     os.Getenv("GOOGLE_CLIENT_ID"),
 	ClientSecret: os.Getenv("GOOGLE_CLIENT_SECRET"),
 	Scopes:       []string{"https://www.googleapis.com/auth/userinfo.email", "https://www.googleapis.com/auth/userinfo.profile"},
 	Endpoint:     google.Endpoint,
 }
 
-// Generate a new random state string
+// Генерация случайного состояния
 func generateState() (string, error) {
 	b := make([]byte, 32)
 	_, err := rand.Read(b)
@@ -30,7 +30,7 @@ func generateState() (string, error) {
 	return base64.URLEncoding.EncodeToString(b), nil
 }
 
-// HandleGoogleLogin initiates Google OAuth login
+// Начало Google OAuth авторизации
 func HandleGoogleLogin(w http.ResponseWriter, r *http.Request) {
 	state, err := generateState()
 	if err != nil {
@@ -47,7 +47,7 @@ func HandleGoogleLogin(w http.ResponseWriter, r *http.Request) {
 	http.Redirect(w, r, url, http.StatusTemporaryRedirect)
 }
 
-// HandleGoogleCallback processes the OAuth callback and retrieves user info
+// Callback после успешной авторизации в Google
 func HandleGoogleCallback(w http.ResponseWriter, r *http.Request) {
 	state, err := r.Cookie("oauth_state")
 	if err != nil || r.FormValue("state") != state.Value {

@@ -11,7 +11,7 @@ import (
 	"time"
 )
 
-var jwtKey = []byte("12345678")
+var jwtKey = []byte("12345678") // Ваш секретный ключ
 
 type Claims struct {
 	Email string `json:"email"`
@@ -29,7 +29,6 @@ func Register(w http.ResponseWriter, r *http.Request) {
 	// Проверяем, существует ли пользователь с таким email
 	var existingUser models.User
 	if err := config.DB.Where("email = ?", user.Email).First(&existingUser).Error; err == nil {
-		// Пользователь с таким email уже существует
 		http.Error(w, "Email already registered", http.StatusConflict)
 		return
 	}
@@ -52,7 +51,7 @@ func Register(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(user)
 }
 
-// Login: Обычный вход с паролем и генерацией JWT
+// Login: Вход с паролем и генерация JWT
 func Login(w http.ResponseWriter, r *http.Request) {
 	var inputUser models.User
 	if err := json.NewDecoder(r.Body).Decode(&inputUser); err != nil {
@@ -73,7 +72,7 @@ func Login(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Создаем JWT-токен
+	// Создание JWT токена
 	expirationTime := time.Now().Add(24 * time.Hour)
 	claims := &Claims{
 		Email: user.Email,
@@ -89,21 +88,20 @@ func Login(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Возвращаем JWT-токен в ответе
+	// Возвращаем токен клиенту
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]string{"token": tokenString})
 }
 
-// GetProfile: Получить информацию о пользователе
+// GetProfile: Получение профиля пользователя по токену
 func GetProfile(w http.ResponseWriter, r *http.Request) {
-	// Извлечение токена из заголовка Authorization
 	authHeader := r.Header.Get("Authorization")
 	if authHeader == "" {
 		http.Error(w, "Authorization header required", http.StatusUnauthorized)
 		return
 	}
 
-	// Парсинг токена
+	// Убираем "Bearer " из начала заголовка
 	tokenString := strings.TrimPrefix(authHeader, "Bearer ")
 	claims := &Claims{}
 
@@ -116,7 +114,7 @@ func GetProfile(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Поиск пользователя по email, извлеченному из токена
+	// Поиск пользователя по email из токена
 	var user models.User
 	if err := config.DB.Where("email = ?", claims.Email).First(&user).Error; err != nil {
 		http.Error(w, "User not found", http.StatusUnauthorized)
@@ -124,10 +122,11 @@ func GetProfile(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Возвращаем информацию о пользователе
+	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(user)
 }
 
-// Logout: Инвалидировать сессию (для клиентской стороны — просто удалить JWT)
+// Logout: Инвалидировать сессию (удаление токена)
 func Logout(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]string{"message": "Logged out successfully"})

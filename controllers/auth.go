@@ -18,9 +18,11 @@ type Claims struct {
 	jwt.StandardClaims
 }
 
-// Register: Обычная регистрация с паролем
+// Register: Обычная регистрация с паролем и генерация JWT токена
 func Register(w http.ResponseWriter, r *http.Request) {
 	var user models.User
+
+	// Декодируем входные данные (email и пароль) из тела запроса
 	if err := json.NewDecoder(r.Body).Decode(&user); err != nil {
 		http.Error(w, "Invalid input", http.StatusBadRequest)
 		return
@@ -33,7 +35,7 @@ func Register(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Хэшируем пароль
+	// Хэшируем пароль с использованием bcrypt
 	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(user.Password), bcrypt.DefaultCost)
 	if err != nil {
 		http.Error(w, "Error hashing password", http.StatusInternalServerError)
@@ -41,14 +43,36 @@ func Register(w http.ResponseWriter, r *http.Request) {
 	}
 	user.Password = string(hashedPassword)
 
-	// Сохраняем пользователя в базе данных
+	// Сохраняем нового пользователя в базе данных
 	if err := config.DB.Create(&user).Error; err != nil {
 		http.Error(w, "Error creating user", http.StatusInternalServerError)
 		return
 	}
 
+	// Генерируем JWT токен для нового пользователя
+	expirationTime := time.Now().Add(24 * time.Hour) // Токен будет действовать 24 часа
+	claims := &Claims{
+		Email: user.Email, // Сохраняем email в токене
+		StandardClaims: jwt.StandardClaims{
+			ExpiresAt: expirationTime.Unix(), // Указываем время истечения токена
+		},
+	}
+
+	// Создаем токен с методом подписи HMAC-SHA256
+	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
+	tokenString, err := token.SignedString(jwtKey)
+	if err != nil {
+		http.Error(w, "Error generating token", http.StatusInternalServerError)
+		return
+	}
+
+	// Возвращаем статус 201 Created и отправляем JSON с данными пользователя и токеном
+	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusCreated)
-	json.NewEncoder(w).Encode(user)
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"user":  user,        // Информация о пользователе
+		"token": tokenString, // JWT токен
+	})
 }
 
 // Login: Вход с паролем и генерация JWT

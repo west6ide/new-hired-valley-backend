@@ -59,13 +59,16 @@ func Register(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Сохраняем пользователя и токен в базе данных
-	user.Token = tokenString // Сохраняем токен
+	user.Token = tokenString
 	if err := config.DB.Create(&user).Error; err != nil {
 		http.Error(w, "Error creating user", http.StatusInternalServerError)
 		return
 	}
 
-	// Возвращаем пользователя и токен
+	// Убираем токен из структуры пользователя перед отправкой
+	user.Token = ""
+
+	// Возвращаем пользователя и токен отдельно
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]interface{}{
 		"user":  user,

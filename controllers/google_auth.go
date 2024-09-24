@@ -4,7 +4,6 @@ import (
 	"crypto/rand"
 	"encoding/base64"
 	"encoding/json"
-	"fmt"
 	"golang.org/x/oauth2"
 	"golang.org/x/oauth2/google"
 	"hired-valley-backend/config"
@@ -52,32 +51,32 @@ func HandleGoogleLogin(w http.ResponseWriter, r *http.Request) {
 func HandleGoogleCallback(w http.ResponseWriter, r *http.Request) {
 	state, err := r.Cookie("oauth_state")
 	if err != nil || r.FormValue("state") != state.Value {
-		http.Redirect(w, r, "/", http.StatusTemporaryRedirect)
+		http.Error(w, "Invalid state parameter", http.StatusBadRequest)
 		return
 	}
 
 	token, err := googleOauthConfig.Exchange(r.Context(), r.FormValue("code"))
 	if err != nil {
-		http.Redirect(w, r, "/", http.StatusTemporaryRedirect)
+		http.Error(w, "Failed to exchange token", http.StatusInternalServerError)
 		return
 	}
 
 	resp, err := http.Get("https://www.googleapis.com/oauth2/v2/userinfo?access_token=" + token.AccessToken)
 	if err != nil {
-		http.Redirect(w, r, "/", http.StatusTemporaryRedirect)
+		http.Error(w, "Failed to get user info", http.StatusInternalServerError)
 		return
 	}
 	defer resp.Body.Close()
 
 	content, err := ioutil.ReadAll(resp.Body)
 	if err != nil {
-		http.Redirect(w, r, "/", http.StatusTemporaryRedirect)
+		http.Error(w, "Failed to read user info", http.StatusInternalServerError)
 		return
 	}
 
 	var googleUser models.GoogleUser
 	if err := json.Unmarshal(content, &googleUser); err != nil {
-		http.Redirect(w, r, "/", http.StatusTemporaryRedirect)
+		http.Error(w, "Failed to parse user info", http.StatusInternalServerError)
 		return
 	}
 
@@ -96,20 +95,17 @@ func HandleGoogleCallback(w http.ResponseWriter, r *http.Request) {
 		googleUser = existingUser
 	}
 
-	// Сохранение данных пользователя в сессии
+	// Сохранение данных пользователя в сессии (опционально)
 	session, _ := config.Store.Get(r, "session-name")
 	session.Values["user"] = googleUser
 	session.Save(r, w)
 
-	// Отображаем информацию о пользователе после авторизации
-	html := fmt.Sprintf(`<html><body>
-        <h1>Добро пожаловать, %s %s!</h1>
-        <p>Email: %s</p>
-        <img src="%s" alt="User Picture"/>
-        <br>
-        <a href="/logout">Выйти</a>
-        </body></html>`,
-		googleUser.FirstName, googleUser.LastName, googleUser.Email)
+	// Возвращаем данные пользователя и токен в формате JSON
+	response := map[string]interface{}{
+		"token": token.AccessToken,
+		"user":  googleUser,
+	}
 
-	fmt.Fprint(w, html)
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(response)
 }

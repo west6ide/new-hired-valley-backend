@@ -4,6 +4,7 @@ import (
 	"crypto/rand"
 	"encoding/base64"
 	"encoding/json"
+	"fmt"
 	"golang.org/x/oauth2"
 	"golang.org/x/oauth2/google"
 	"hired-valley-backend/config"
@@ -48,7 +49,6 @@ func HandleGoogleLogin(w http.ResponseWriter, r *http.Request) {
 	http.Redirect(w, r, url, http.StatusTemporaryRedirect)
 }
 
-// HandleGoogleCallback processes the OAuth callback and retrieves user info
 func HandleGoogleCallback(w http.ResponseWriter, r *http.Request) {
 	state, err := r.Cookie("oauth_state")
 	if err != nil || r.FormValue("state") != state.Value {
@@ -93,6 +93,7 @@ func HandleGoogleCallback(w http.ResponseWriter, r *http.Request) {
 		existingUser.FirstName = googleUser.FirstName
 		existingUser.LastName = googleUser.LastName
 		config.DB.Save(&existingUser)
+		googleUser = existingUser
 	}
 
 	// Сохранение данных пользователя в сессии
@@ -100,11 +101,15 @@ func HandleGoogleCallback(w http.ResponseWriter, r *http.Request) {
 	session.Values["user"] = googleUser
 	session.Save(r, w)
 
-	// Устанавливаем cookie с данными пользователя
-	http.SetCookie(w, &http.Cookie{
-		Name:  "user",
-		Value: googleUser.FirstName,
-	})
+	// Отображаем информацию о пользователе после авторизации
+	html := fmt.Sprintf(`<html><body>
+        <h1>Добро пожаловать, %s %s!</h1>
+        <p>Email: %s</p>
+        <img src="%s" alt="User Picture"/>
+        <br>
+        <a href="/logout">Выйти</a>
+        </body></html>`,
+		googleUser.FirstName, googleUser.LastName, googleUser.Email)
 
-	http.Redirect(w, r, "/", http.StatusTemporaryRedirect)
+	fmt.Fprint(w, html)
 }

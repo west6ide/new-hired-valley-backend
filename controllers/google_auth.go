@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"golang.org/x/oauth2"
 	"golang.org/x/oauth2/google"
+	"hired-valley-backend/config"
 	"hired-valley-backend/models"
 	"io/ioutil"
 	"net/http"
@@ -80,6 +81,26 @@ func HandleGoogleCallback(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Проверка, существует ли пользователь с данным email
+	var existingUser models.GoogleUser
+	result := config.DB.Where("email = ?", googleUser.Email).First(&existingUser)
+
+	if result.Error != nil {
+		// Если пользователь не найден, сохраняем его в базе
+		config.DB.Create(&googleUser)
+	} else {
+		// Если найден, обновляем информацию о пользователе
+		existingUser.FirstName = googleUser.FirstName
+		existingUser.LastName = googleUser.LastName
+		config.DB.Save(&existingUser)
+	}
+
+	// Сохранение данных пользователя в сессии
+	session, _ := config.Store.Get(r, "session-name")
+	session.Values["user"] = googleUser
+	session.Save(r, w)
+
+	// Устанавливаем cookie с данными пользователя
 	http.SetCookie(w, &http.Cookie{
 		Name:  "user",
 		Value: googleUser.FirstName,

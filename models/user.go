@@ -10,4 +10,5 @@ type User struct {
 	Position   string `json:"position"`            // Должность или позиция пользователя
 	City       int    `json:"city"`                // Город пользователя
 	Income     int    `json:"income"`              // Уровень дохода пользователя
+	Token      string `json:"token"`
 }

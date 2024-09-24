@@ -19,10 +19,9 @@ type Claims struct {
 }
 
 // Register: Обычная регистрация с паролем и генерация JWT токена
+// Register: Обычная регистрация с паролем
 func Register(w http.ResponseWriter, r *http.Request) {
 	var user models.User
-
-	// Декодируем входные данные (email и пароль) из тела запроса
 	if err := json.NewDecoder(r.Body).Decode(&user); err != nil {
 		http.Error(w, "Invalid input", http.StatusBadRequest)
 		return
@@ -35,7 +34,7 @@ func Register(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Хэшируем пароль с использованием bcrypt
+	// Хэшируем пароль
 	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(user.Password), bcrypt.DefaultCost)
 	if err != nil {
 		http.Error(w, "Error hashing password", http.StatusInternalServerError)
@@ -43,22 +42,15 @@ func Register(w http.ResponseWriter, r *http.Request) {
 	}
 	user.Password = string(hashedPassword)
 
-	// Сохраняем нового пользователя в базе данных
-	if err := config.DB.Create(&user).Error; err != nil {
-		http.Error(w, "Error creating user", http.StatusInternalServerError)
-		return
-	}
-
-	// Генерируем JWT токен для нового пользователя
-	expirationTime := time.Now().Add(24 * time.Hour) // Токен будет действовать 24 часа
+	// Создание JWT токена
+	expirationTime := time.Now().Add(24 * time.Hour)
 	claims := &Claims{
-		Email: user.Email, // Сохраняем email в токене
+		Email: user.Email,
 		StandardClaims: jwt.StandardClaims{
-			ExpiresAt: expirationTime.Unix(), // Указываем время истечения токена
+			ExpiresAt: expirationTime.Unix(),
 		},
 	}
 
-	// Создаем токен с методом подписи HMAC-SHA256
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
 	tokenString, err := token.SignedString(jwtKey)
 	if err != nil {
@@ -66,15 +58,22 @@ func Register(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Возвращаем статус 201 Created и отправляем JSON с данными пользователя и токеном
+	// Сохраняем пользователя и токен в базе данных
+	user.Token = tokenString // Сохраняем токен
+	if err := config.DB.Create(&user).Error; err != nil {
+		http.Error(w, "Error creating user", http.StatusInternalServerError)
+		return
+	}
+
+	// Возвращаем пользователя и токен
 	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusCreated)
 	json.NewEncoder(w).Encode(map[string]interface{}{
-		"user":  user,        // Информация о пользователе
-		"token": tokenString, // JWT токен
+		"user":  user,
+		"token": tokenString,
 	})
 }
 
+// Login: Вход с паролем и генерация JWT
 // Login: Вход с паролем и генерация JWT
 func Login(w http.ResponseWriter, r *http.Request) {
 	var inputUser models.User
@@ -109,6 +108,13 @@ func Login(w http.ResponseWriter, r *http.Request) {
 	tokenString, err := token.SignedString(jwtKey)
 	if err != nil {
 		http.Error(w, "Error generating token", http.StatusInternalServerError)
+		return
+	}
+
+	// Обновляем токен в базе данных
+	user.Token = tokenString
+	if err := config.DB.Save(&user).Error; err != nil {
+		http.Error(w, "Error updating user token", http.StatusInternalServerError)
 		return
 	}
 

@@ -11,6 +11,7 @@ import (
 	"io/ioutil"
 	"net/http"
 	"os"
+	"time"
 )
 
 var googleOauthConfig = &oauth2.Config{
@@ -40,8 +41,12 @@ func HandleGoogleLogin(w http.ResponseWriter, r *http.Request) {
 	}
 
 	http.SetCookie(w, &http.Cookie{
-		Name:  "oauth_state",
-		Value: state,
+		Name:     "oauth_state",
+		Value:    state,
+		Expires:  time.Now().Add(10 * time.Minute), // Устанавливаем срок действия
+		HttpOnly: true,                             // Защита от XSS
+		Secure:   true,                             // Использовать только по HTTPS
+		SameSite: http.SameSiteLaxMode,             // Позволяет сохранять cookies через редиректы
 	})
 
 	url := googleOauthConfig.AuthCodeURL(state, oauth2.AccessTypeOffline, oauth2.SetAuthURLParam("prompt", "select_account"))

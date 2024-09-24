@@ -4,6 +4,7 @@ import (
 	"crypto/rand"
 	"encoding/base64"
 	"encoding/json"
+	"fmt"
 	"golang.org/x/oauth2"
 	"golang.org/x/oauth2/google"
 	"hired-valley-backend/config"
@@ -45,9 +46,10 @@ func HandleGoogleLogin(w http.ResponseWriter, r *http.Request) {
 		Value:    state,
 		Expires:  time.Now().Add(10 * time.Minute), // Устанавливаем срок действия
 		HttpOnly: true,                             // Защита от XSS
-		Secure:   true,                             // Использовать только по HTTPS
+		Secure:   false,                            // Используйте false для локального тестирования
 		SameSite: http.SameSiteLaxMode,             // Позволяет сохранять cookies через редиректы
 	})
+	fmt.Println("State cookie set:", state)
 
 	url := googleOauthConfig.AuthCodeURL(state, oauth2.AccessTypeOffline, oauth2.SetAuthURLParam("prompt", "select_account"))
 	http.Redirect(w, r, url, http.StatusTemporaryRedirect)

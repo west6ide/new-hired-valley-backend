@@ -54,18 +54,27 @@ func HandleGoogleLogin(w http.ResponseWriter, r *http.Request) {
 }
 
 func HandleGoogleCallback(w http.ResponseWriter, r *http.Request) {
-	state, err := r.Cookie("oauth_state")
-	if err != nil || r.FormValue("state") != state.Value {
+	// Получение состояния из cookie
+	stateCookie, err := r.Cookie("oauth_state")
+	if err != nil {
+		http.Error(w, "Failed to retrieve state cookie", http.StatusBadRequest)
+		return
+	}
+
+	// Сравнение полученного состояния с состоянием из cookie
+	if r.FormValue("state") != stateCookie.Value {
 		http.Error(w, "Invalid state parameter", http.StatusBadRequest)
 		return
 	}
 
+	// Обмен кода на токен
 	token, err := googleOauthConfig.Exchange(r.Context(), r.FormValue("code"))
 	if err != nil {
 		http.Error(w, "Failed to exchange token", http.StatusInternalServerError)
 		return
 	}
 
+	// Получение информации о пользователе
 	resp, err := http.Get("https://www.googleapis.com/oauth2/v2/userinfo?access_token=" + token.AccessToken)
 	if err != nil {
 		http.Error(w, "Failed to get user info", http.StatusInternalServerError)
@@ -73,19 +82,21 @@ func HandleGoogleCallback(w http.ResponseWriter, r *http.Request) {
 	}
 	defer resp.Body.Close()
 
+	// Чтение содержимого ответа
 	content, err := ioutil.ReadAll(resp.Body)
 	if err != nil {
 		http.Error(w, "Failed to read user info", http.StatusInternalServerError)
 		return
 	}
 
+	// Десериализация данных пользователя
 	var googleUser models.GoogleUser
 	if err := json.Unmarshal(content, &googleUser); err != nil {
 		http.Error(w, "Failed to parse user info", http.StatusInternalServerError)
 		return
 	}
 
-	// Проверка, существует ли пользователь с данным email
+	// Проверка на существование пользователя
 	var existingUser models.GoogleUser
 	result := config.DB.Where("email = ?", googleUser.Email).First(&existingUser)
 
@@ -100,7 +111,7 @@ func HandleGoogleCallback(w http.ResponseWriter, r *http.Request) {
 		googleUser = existingUser
 	}
 
-	// Сохранение данных пользователя в сессии (опционально)
+	// Сохранение данных пользователя в сессии
 	session, _ := config.Store.Get(r, "session-name")
 	session.Values["user"] = googleUser
 	session.Save(r, w)
@@ -111,6 +122,8 @@ func HandleGoogleCallback(w http.ResponseWriter, r *http.Request) {
 		"user":  googleUser,
 	}
 
+	// Установка заголовков и отправка JSON-ответа
 	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK) // Устанавливаем статус 200 OK
 	json.NewEncoder(w).Encode(response)
 }

@@ -37,6 +37,10 @@ func HandleLinkedInLogin(w http.ResponseWriter, r *http.Request) {
 func HandleLinkedInCallback(w http.ResponseWriter, r *http.Request) {
 	// Получение кода авторизации
 	code := r.URL.Query().Get("code")
+	if code == "" {
+		http.Error(w, "Код авторизации отсутствует", http.StatusBadRequest)
+		return
+	}
 
 	// Обмен кода на токен
 	token, err := LinkedInOAuthConfig.Exchange(context.Background(), code)

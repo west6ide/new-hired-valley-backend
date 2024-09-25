@@ -4,7 +4,7 @@ go 1.23.0
 
 require (
 	github.com/dgrijalva/jwt-go v3.2.0+incompatible
-	github.com/golang-jwt/jwt/v4 v4.5.0
+	github.com/goccy/go-json v0.10.3
 	github.com/gorilla/sessions v1.4.0
 	github.com/jinzhu/gorm v1.9.16
 	github.com/rs/cors v1.11.1

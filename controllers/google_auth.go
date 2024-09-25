@@ -4,7 +4,7 @@ import (
 	"crypto/rand"
 	"encoding/base64"
 	"encoding/json"
-	"github.com/dgrijalva/jwt-go"
+	"github.com/golang-jwt/jwt/v4" // Используем только golang-jwt/jwt/v4
 	"golang.org/x/oauth2"
 	"golang.org/x/oauth2/google"
 	"gorm.io/gorm"
@@ -18,13 +18,19 @@ import (
 
 var jwtKeyGoogle = []byte(os.Getenv("JWT_GOOGLE_SECRET")) // Инициализация jwtKey
 
+// Claims структура для JWT
+type ClaimsGoogle struct {
+	Email string `json:"email"`
+	jwt.RegisteredClaims
+}
+
 // GenerateJWT создает JWT токен для пользователя
 func GenerateJWT(email string) (string, error) {
 	expirationTime := time.Now().Add(24 * time.Hour) // Токен будет действителен 24 часа
-	claims := &Claims{
+	claims := &ClaimsGoogle{
 		Email: email,
-		StandardClaims: jwt.StandardClaims{
-			ExpiresAt: expirationTime.Unix(),
+		RegisteredClaims: jwt.RegisteredClaims{
+			ExpiresAt: jwt.NewNumericDate(expirationTime),
 		},
 	}
 
@@ -142,13 +148,16 @@ func HandleGoogleCallback(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Возвращаем данные пользователя и токен в ответе
-	response := map[string]interface{}{
-		"token": jwtToken,
-		"user":  googleUser,
-	}
+	// Сохраняем JWT токен в куки
+	http.SetCookie(w, &http.Cookie{
+		Name:     "auth_token",
+		Value:    jwtToken,
+		Expires:  time.Now().Add(24 * time.Hour),
+		HttpOnly: true,
+		Secure:   os.Getenv("ENV") == "production", // Установить Secure: true для продакшена
+		Path:     "/",
+	})
 
-	// Устанавливаем заголовки и отправляем JSON-ответ
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(response)
+	// Перенаправление пользователя на главную страницу
+	http.Redirect(w, r, "/", http.StatusSeeOther) // Перенаправляем пользователя на главную страницу
 }

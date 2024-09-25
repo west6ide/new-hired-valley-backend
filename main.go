@@ -2,7 +2,6 @@ package main
 
 import (
 	"fmt"
-
 	"hired-valley-backend/config"
 	"hired-valley-backend/controllers"
 	"hired-valley-backend/controllers/httpCors"
@@ -18,17 +17,16 @@ func main() {
 		port = "8080" // Значение по умолчанию
 	}
 
-	fmt.Println("ClientID:", os.Getenv("GOOGLE_CLIENT_ID"))
-	fmt.Println("ClientSecret:", os.Getenv("GOOGLE_CLIENT_SECRET"))
-
 	// Инициализация базы данных
 	config.InitDB()
-	config.DB.AutoMigrate(&models.GoogleUser{}, &models.User{}) // Автоматическая миграция моделей
+	config.DB.AutoMigrate(&models.GoogleUser{}, &models.User{}, &models.LinkedInUser{}) // Добавление миграции для LinkedInUser
 
 	// Настройка маршрутов
 	http.HandleFunc("/", handleHome)
 	http.HandleFunc("/login/google", controllers.HandleGoogleLogin)
 	http.HandleFunc("/callback/google", controllers.HandleGoogleCallback)
+	http.HandleFunc("/login/linkedin", controllers.HandleLinkedInLogin)       // LinkedIn login
+	http.HandleFunc("/callback/linkedin", controllers.HandleLinkedInCallback) // LinkedIn callback
 	http.HandleFunc("/register", controllers.Register)
 	http.HandleFunc("/login", controllers.Login)
 	http.HandleFunc("/api/profile", controllers.GetProfile)

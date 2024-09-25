@@ -16,9 +16,9 @@ import (
 
 // LinkedInOAuthConfig — конфигурация для LinkedIn OAuth2
 var LinkedInOAuthConfig = &oauth2.Config{
-	ClientID:     os.Getenv("LINKEDIN_CLIENT_ID"),           // Установи эти переменные окружения
-	ClientSecret: os.Getenv("LINKEDIN_CLIENT_SECRET"),       // Установи эти переменные окружения
-	RedirectURL:  "http://localhost:8080/callback/linkedin", // URL для перенаправления после авторизации
+	ClientID:     os.Getenv("LINKEDIN_CLIENT_ID"),     // Установи эти переменные окружения
+	ClientSecret: os.Getenv("LINKEDIN_CLIENT_SECRET"), // Установи эти переменные окружения
+	RedirectURL:  os.Getenv("LINKEDIN_REDIRECT_URL"),  // URL для перенаправления после авторизации
 	Scopes:       []string{"r_liteprofile", "r_emailaddress"},
 	Endpoint: oauth2.Endpoint{
 		AuthURL:  "https://www.linkedin.com/oauth/v2/authorization",

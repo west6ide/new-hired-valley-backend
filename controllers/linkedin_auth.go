@@ -5,35 +5,28 @@ import (
 	"encoding/json"
 	"fmt"
 	"golang.org/x/oauth2"
+	"golang.org/x/oauth2/linkedin"
 	"hired-valley-backend/config"
 	"hired-valley-backend/models"
-	"io/ioutil"
 	"net/http"
 	"os"
-
-	"gorm.io/gorm"
 )
 
-// LinkedInOAuthConfig — конфигурация для LinkedIn OAuth2
-var LinkedInOAuthConfig = &oauth2.Config{
-	ClientID:     os.Getenv("LINKEDIN_CLIENT_ID"),     // Установи эти переменные окружения
-	ClientSecret: os.Getenv("LINKEDIN_CLIENT_SECRET"), // Установи эти переменные окружения
-	RedirectURL:  os.Getenv("LINKEDIN_REDIRECT_URL"),  // URL для перенаправления после авторизации
-	Scopes:       []string{"r_liteprofile", "r_emailaddress"},
-	Endpoint: oauth2.Endpoint{
-		AuthURL:  "https://www.linkedin.com/oauth/v2/authorization",
-		TokenURL: "https://www.linkedin.com/oauth/v2/accessToken",
-	},
+var linkedinOAuthConfig = &oauth2.Config{
+	ClientID:     os.Getenv("LINKEDIN_CLIENT_ID"),
+	ClientSecret: os.Getenv("LINKEDIN_CLIENT_SECRET"),
+	RedirectURL:  os.Getenv("LINKEDIN_REDIRECT_URL"),
+	Scopes:       []string{"openid", "profile", "email"},
+	Endpoint:     linkedin.Endpoint,
 }
 
-// HandleLinkedInLogin обрабатывает запрос на авторизацию через LinkedIn
+// Обработчик для начала авторизации через LinkedIn
 func HandleLinkedInLogin(w http.ResponseWriter, r *http.Request) {
-	// Генерация URL для авторизации
-	url := LinkedInOAuthConfig.AuthCodeURL("state")
+	url := linkedinOAuthConfig.AuthCodeURL("state", oauth2.AccessTypeOffline)
 	http.Redirect(w, r, url, http.StatusTemporaryRedirect)
 }
 
-// HandleLinkedInCallback обрабатывает редирект от LinkedIn после успешной авторизации
+// Обработчик для получения токена и данных пользователя
 func HandleLinkedInCallback(w http.ResponseWriter, r *http.Request) {
 	// Получение кода авторизации
 	code := r.URL.Query().Get("code")
@@ -42,52 +35,65 @@ func HandleLinkedInCallback(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Обмен кода на токен
-	token, err := LinkedInOAuthConfig.Exchange(context.Background(), code)
+	// Получение токена
+	token, err := linkedinOAuthConfig.Exchange(context.Background(), code)
 	if err != nil {
-		http.Error(w, "Не удалось получить токен", http.StatusInternalServerError)
+		http.Error(w, "Не удалось получить токен: "+err.Error(), http.StatusInternalServerError)
 		return
 	}
 
-	// Использование токена для получения данных пользователя
-	client := LinkedInOAuthConfig.Client(context.Background(), token)
+	// Создание клиента для запросов к LinkedIn API
+	client := linkedinOAuthConfig.Client(context.Background(), token)
+
+	// Запрос данных профиля пользователя
 	resp, err := client.Get("https://api.linkedin.com/v2/me")
 	if err != nil {
-		http.Error(w, "Ошибка получения профиля", http.StatusInternalServerError)
+		http.Error(w, "Не удалось получить данные профиля: "+err.Error(), http.StatusInternalServerError)
 		return
 	}
 	defer resp.Body.Close()
 
-	// Чтение данных ответа
-	data, _ := ioutil.ReadAll(resp.Body)
-
-	// Парсинг данных пользователя
+	// Декодирование данных профиля
 	var linkedInUser models.LinkedInUser
-	err = json.Unmarshal(data, &linkedInUser)
+	if err := json.NewDecoder(resp.Body).Decode(&linkedInUser); err != nil {
+		http.Error(w, "Ошибка при декодировании данных профиля: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	// Запрос email пользователя
+	emailResp, err := client.Get("https://api.linkedin.com/v2/emailAddress?q=members&projection=(elements*(handle~))")
 	if err != nil {
-		http.Error(w, "Ошибка парсинга профиля", http.StatusInternalServerError)
+		http.Error(w, "Не удалось получить email: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
+	defer emailResp.Body.Close()
+
+	// Структура для email ответа
+	type EmailResponse struct {
+		Elements []struct {
+			HandleTilde struct {
+				EmailAddress string `json:"emailAddress"`
+			} `json:"handle~"`
+		} `json:"elements"`
+	}
+
+	var emailData EmailResponse
+	if err := json.NewDecoder(emailResp.Body).Decode(&emailData); err != nil {
+		http.Error(w, "Ошибка при декодировании email: "+err.Error(), http.StatusInternalServerError)
 		return
 	}
 
-	// Проверка наличия пользователя в базе данных
-	var existingUser models.LinkedInUser
-	result := config.DB.Where("linked_in_id = ?", linkedInUser.LinkedInID).First(&existingUser)
+	// Сохранение email в структуре пользователя
+	if len(emailData.Elements) > 0 {
+		linkedInUser.Email = emailData.Elements[0].HandleTilde.EmailAddress
+	}
 
-	// Если пользователь не найден, создаем нового
-	if result.Error == gorm.ErrRecordNotFound {
-		newUser := models.LinkedInUser{
-			LinkedInID: linkedInUser.LinkedInID,
-			FirstName:  linkedInUser.FirstName,
-			LastName:   linkedInUser.LastName,
-			Email:      linkedInUser.Email,
-		}
-		config.DB.Create(&newUser)
-	} else if result.Error != nil {
-		http.Error(w, "Ошибка базы данных", http.StatusInternalServerError)
+	// Сохранение данных в базу данных
+	if err := config.DB.Create(&linkedInUser).Error; err != nil {
+		http.Error(w, "Ошибка при сохранении данных в базу: "+err.Error(), http.StatusInternalServerError)
 		return
 	}
 
-	// Здесь можно создать сессию и сохранить информацию о пользователе
-
-	fmt.Fprintf(w, "Добро пожаловать, %s %s!", linkedInUser.FirstName, linkedInUser.LastName)
+	// Отображение данных пользователя
+	fmt.Fprintf(w, "Добро пожаловать, %s %s! Ваш email: %s", linkedInUser.FirstName, linkedInUser.LastName, linkedInUser.Email)
 }

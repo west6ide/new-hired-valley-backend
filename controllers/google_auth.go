@@ -10,11 +10,13 @@ import (
 	"gorm.io/gorm"
 	"hired-valley-backend/config"
 	"hired-valley-backend/models"
-	"io/ioutil"
+	"io"
 	"net/http"
 	"os"
 	"time"
 )
+
+var jwtKeyGoogle = []byte(os.Getenv("JWT_GOOGLE_SECRET")) // Инициализация jwtKey
 
 // GenerateJWT создает JWT токен для пользователя
 func GenerateJWT(email string) (string, error) {
@@ -27,7 +29,7 @@ func GenerateJWT(email string) (string, error) {
 	}
 
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
-	tokenString, err := token.SignedString(jwtKey)
+	tokenString, err := token.SignedString(jwtKeyGoogle)
 	if err != nil {
 		return "", err
 	}
@@ -66,7 +68,7 @@ func HandleGoogleLogin(w http.ResponseWriter, r *http.Request) {
 		Value:    state,
 		Expires:  time.Now().Add(10 * time.Minute),
 		HttpOnly: true,
-		Secure:   false, // Для тестирования локально
+		Secure:   os.Getenv("ENV") == "production", // Установить Secure: true для продакшена
 		SameSite: http.SameSiteLaxMode,
 	})
 
@@ -98,7 +100,7 @@ func HandleGoogleCallback(w http.ResponseWriter, r *http.Request) {
 	}
 	defer resp.Body.Close()
 
-	content, err := ioutil.ReadAll(resp.Body)
+	content, err := io.ReadAll(resp.Body) // Используем io.ReadAll вместо устаревшего ioutil.ReadAll
 	if err != nil {
 		http.Error(w, "Failed to read user info", http.StatusInternalServerError)
 		return
@@ -116,13 +118,20 @@ func HandleGoogleCallback(w http.ResponseWriter, r *http.Request) {
 	result := config.DB.Where("email = ?", googleUser.Email).First(&existingUser)
 
 	if result.Error == gorm.ErrRecordNotFound {
-		// Если пользователя нет в базе, создаем новую запись
-		config.DB.Create(&googleUser)
+		if err := config.DB.Create(&googleUser).Error; err != nil { // Проверяем ошибки создания записи
+			http.Error(w, "Failed to save user", http.StatusInternalServerError)
+			return
+		}
+	} else if result.Error != nil {
+		http.Error(w, "Database error", http.StatusInternalServerError)
+		return
 	} else {
-		// Если пользователь уже существует, обновляем информацию
 		existingUser.FirstName = googleUser.FirstName
 		existingUser.LastName = googleUser.LastName
-		config.DB.Save(&existingUser)
+		if err := config.DB.Save(&existingUser).Error; err != nil { // Проверяем ошибки обновления
+			http.Error(w, "Failed to update user", http.StatusInternalServerError)
+			return
+		}
 		googleUser = existingUser
 	}
 

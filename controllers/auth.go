@@ -7,18 +7,18 @@ import (
 	"hired-valley-backend/config"
 	"hired-valley-backend/models"
 	"net/http"
+	"os"
 	"strings"
 	"time"
 )
 
-var jwtKey = []byte("12345678") // Ваш секретный ключ
+var jwtKey = []byte(os.Getenv("JWT_SECRET")) // Инициализация jwtKey
 
 type Claims struct {
 	Email string `json:"email"`
 	jwt.StandardClaims
 }
 
-// Register: Обычная регистрация с паролем и генерация JWT токена
 // Register: Обычная регистрация с паролем
 func Register(w http.ResponseWriter, r *http.Request) {
 	var user models.User

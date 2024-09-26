@@ -28,6 +28,7 @@ func HandleLinkedInLogin(w http.ResponseWriter, r *http.Request) {
 
 // Обработчик для получения токена и данных пользователя
 func HandleLinkedInCallback(w http.ResponseWriter, r *http.Request) {
+
 	// Получение кода авторизации
 	code := r.URL.Query().Get("code")
 	if code == "" {
@@ -92,7 +93,8 @@ func HandleLinkedInCallback(w http.ResponseWriter, r *http.Request) {
 	linkedInUser.AccessToken = token.AccessToken
 
 	// Сохранение данных в базу данных
-	if err := config.DB.Create(&linkedInUser).Error; err != nil {
+	if err := config.DB.Create(&models.LinkedInUser{}).Error; err != nil {
+		fmt.Printf("Ошибка сохранения пользователя: %v\n", err) // Логирование ошибки
 		http.Error(w, "Ошибка при сохранении данных в базу: "+err.Error(), http.StatusInternalServerError)
 		return
 	}

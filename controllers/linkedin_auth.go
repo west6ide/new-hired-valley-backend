@@ -28,7 +28,6 @@ func HandleLinkedInLogin(w http.ResponseWriter, r *http.Request) {
 
 // Обработчик для получения токена и данных пользователя
 func HandleLinkedInCallback(w http.ResponseWriter, r *http.Request) {
-
 	// Получение кода авторизации
 	code := r.URL.Query().Get("code")
 	if code == "" {
@@ -43,6 +42,9 @@ func HandleLinkedInCallback(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Логируем токен для отладки (не забудьте удалить это в продакшене)
+	fmt.Printf("Токен: %s\n", token.AccessToken)
+
 	// Создание клиента для запросов к LinkedIn API
 	client := linkedinOAuthConfig.Client(context.Background(), token)
 
@@ -54,12 +56,18 @@ func HandleLinkedInCallback(w http.ResponseWriter, r *http.Request) {
 	}
 	defer resp.Body.Close()
 
+	// Логируем статус ответа для отладки
+	fmt.Printf("Ответ на запрос профиля: %v\n", resp.Status)
+
 	// Декодирование данных профиля
 	var linkedInUser models.LinkedInUser
 	if err := json.NewDecoder(resp.Body).Decode(&linkedInUser); err != nil {
 		http.Error(w, "Ошибка при декодировании данных профиля: "+err.Error(), http.StatusInternalServerError)
 		return
 	}
+
+	// Логируем полученные данные профиля для отладки
+	fmt.Printf("Полученные данные профиля: %+v\n", linkedInUser)
 
 	// Запрос email пользователя
 	emailResp, err := client.Get("https://api.linkedin.com/v2/emailAddress?q=members&projection=(elements*(handle~))")
@@ -68,6 +76,9 @@ func HandleLinkedInCallback(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	defer emailResp.Body.Close()
+
+	// Логируем статус ответа для отладки
+	fmt.Printf("Ответ на запрос email: %v\n", emailResp.Status)
 
 	// Структура для email ответа
 	type EmailResponse struct {
@@ -84,20 +95,29 @@ func HandleLinkedInCallback(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Сохранение email в структуре пользователя
+	// Логируем полученный email для отладки
 	if len(emailData.Elements) > 0 {
+		fmt.Printf("Полученный email: %s\n", emailData.Elements[0].HandleTilde.EmailAddress)
 		linkedInUser.Email = emailData.Elements[0].HandleTilde.EmailAddress
+	} else {
+		http.Error(w, "Не удалось найти email пользователя", http.StatusInternalServerError)
+		return
 	}
 
 	// Сохранение токена в структуре пользователя
 	linkedInUser.AccessToken = token.AccessToken
 
+	// Логируем данные перед сохранением в базу
+	fmt.Printf("Данные перед сохранением: %+v\n", linkedInUser)
+
 	// Сохранение данных в базу данных
-	if err := config.DB.Create(&models.LinkedInUser{}).Error; err != nil {
-		fmt.Printf("Ошибка сохранения пользователя: %v\n", err) // Логирование ошибки
+	if err := config.DB.Create(&linkedInUser).Error; err != nil {
 		http.Error(w, "Ошибка при сохранении данных в базу: "+err.Error(), http.StatusInternalServerError)
 		return
 	}
+
+	// Логируем успех сохранения
+	fmt.Println("Пользователь успешно сохранен в базе")
 
 	// Отображение данных пользователя
 	fmt.Fprintf(w, "Добро пожаловать, %s %s! Ваш email: %s", linkedInUser.FirstName, linkedInUser.LastName, linkedInUser.Email)

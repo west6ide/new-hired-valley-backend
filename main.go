@@ -2,10 +2,12 @@ package main
 
 import (
 	"fmt"
+	"github.com/gin-gonic/gin"
 	"hired-valley-backend/config"
 	"hired-valley-backend/controllers"
 	"hired-valley-backend/controllers/httpCors"
 	"hired-valley-backend/models"
+	"hired-valley-backend/routes"
 	"net/http"
 	"os"
 )
@@ -20,6 +22,9 @@ func main() {
 	// Инициализация базы данных
 	config.InitDB()
 	config.DB.AutoMigrate(&models.GoogleUser{}, &models.User{}, &models.LinkedInUser{}) // Добавление миграции для LinkedInUser
+
+	r := gin.Default()
+	routes.RegisterStoryRoutes(r, config.DB)
 
 	// Настройка маршрутов
 	http.HandleFunc("/", handleHome)

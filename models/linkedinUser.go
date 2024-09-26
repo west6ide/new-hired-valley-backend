@@ -1,14 +1,12 @@
 package models
 
-import (
-	"gorm.io/gorm"
-)
+import "gorm.io/gorm"
 
-// LinkedInUser представляет пользователя LinkedIn
 type LinkedInUser struct {
 	gorm.Model
-	LinkedInID string `json:"id"`
-	FirstName  string `json:"localizedFirstName"`
-	LastName   string `json:"localizedLastName"`
-	Email      string `json:"emailAddress"`
+	LinkedInID  string `json:"id"`
+	FirstName   string `json:"localizedFirstName"`
+	LastName    string `json:"localizedLastName"`
+	Email       string `json:"emailAddress"`
+	AccessToken string `json:"access_token"` // Поле для хранения токена
 }

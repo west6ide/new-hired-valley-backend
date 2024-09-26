@@ -88,6 +88,9 @@ func HandleLinkedInCallback(w http.ResponseWriter, r *http.Request) {
 		linkedInUser.Email = emailData.Elements[0].HandleTilde.EmailAddress
 	}
 
+	// Сохранение токена в структуре пользователя
+	linkedInUser.AccessToken = token.AccessToken
+
 	// Сохранение данных в базу данных
 	if err := config.DB.Create(&linkedInUser).Error; err != nil {
 		http.Error(w, "Ошибка при сохранении данных в базу: "+err.Error(), http.StatusInternalServerError)

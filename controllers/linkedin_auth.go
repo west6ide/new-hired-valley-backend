@@ -8,7 +8,6 @@ import (
 	"golang.org/x/oauth2/linkedin"
 	"hired-valley-backend/config"
 	"hired-valley-backend/models"
-	"io/ioutil"
 	"log"
 	"net/http"
 	"os"
@@ -18,7 +17,7 @@ var linkedinOAuthConfig = &oauth2.Config{
 	ClientID:     os.Getenv("LINKEDIN_CLIENT_ID"),
 	ClientSecret: os.Getenv("LINKEDIN_CLIENT_SECRET"),
 	RedirectURL:  os.Getenv("LINKEDIN_REDIRECT_URL"),
-	Scopes:       []string{"r_liteprofile", "r_emailaddress"}, // Убедитесь, что здесь указаны корректные scopes
+	Scopes:       []string{"openid", "profile", "email"},
 	Endpoint:     linkedin.Endpoint,
 }
 
@@ -57,10 +56,7 @@ func HandleLinkedInCallback(w http.ResponseWriter, r *http.Request) {
 
 	// Проверка кода ответа от LinkedIn API
 	if resp.StatusCode != http.StatusOK {
-		bodyBytes, _ := ioutil.ReadAll(resp.Body)
-		bodyString := string(bodyBytes)
-		log.Printf("Ошибка при запросе данных профиля: статус код %d, тело ответа: %s", resp.StatusCode, bodyString)
-		http.Error(w, fmt.Sprintf("Не удалось получить корректный ответ от LinkedIn API. Статус: %d, Ответ: %s", resp.StatusCode, bodyString), http.StatusInternalServerError)
+		http.Error(w, "Не удалось получить корректный ответ от LinkedIn API", http.StatusInternalServerError)
 		return
 	}
 
@@ -99,10 +95,7 @@ func HandleLinkedInCallback(w http.ResponseWriter, r *http.Request) {
 
 	// Проверка кода ответа от LinkedIn API
 	if emailResp.StatusCode != http.StatusOK {
-		bodyBytes, _ := ioutil.ReadAll(emailResp.Body)
-		bodyString := string(bodyBytes)
-		log.Printf("Ошибка при запросе email: статус код %d, тело ответа: %s", emailResp.StatusCode, bodyString)
-		http.Error(w, fmt.Sprintf("Не удалось получить корректный ответ от LinkedIn API для email. Статус: %d, Ответ: %s", emailResp.StatusCode, bodyString), http.StatusInternalServerError)
+		http.Error(w, "Не удалось получить корректный ответ от LinkedIn API для email", http.StatusInternalServerError)
 		return
 	}
 

@@ -8,7 +8,6 @@ import (
 	"golang.org/x/oauth2/linkedin"
 	"hired-valley-backend/config"
 	"hired-valley-backend/models"
-	"log"
 	"net/http"
 	"os"
 )
@@ -54,35 +53,11 @@ func HandleLinkedInCallback(w http.ResponseWriter, r *http.Request) {
 	}
 	defer resp.Body.Close()
 
-	// Проверка кода ответа от LinkedIn API
-	if resp.StatusCode != http.StatusOK {
-		http.Error(w, "Не удалось получить корректный ответ от LinkedIn API", http.StatusInternalServerError)
-		return
-	}
-
-	// Логируем ответ для отладки
-	log.Println("Ответ от LinkedIn (профиль):", resp)
-
 	// Декодирование данных профиля
-	var profileData map[string]interface{}
-	if err := json.NewDecoder(resp.Body).Decode(&profileData); err != nil {
+	var linkedInUser models.LinkedInUser
+	if err := json.NewDecoder(resp.Body).Decode(&linkedInUser); err != nil {
 		http.Error(w, "Ошибка при декодировании данных профиля: "+err.Error(), http.StatusInternalServerError)
 		return
-	}
-
-	// Логируем декодированные данные профиля для отладки
-	log.Println("Декодированные данные профиля:", profileData)
-
-	// Создаем пользователя с данными из профиля
-	var linkedInUser models.LinkedInUser
-	if id, ok := profileData["id"].(string); ok {
-		linkedInUser.LinkedInID = id
-	}
-	if firstName, ok := profileData["localizedFirstName"].(string); ok {
-		linkedInUser.FirstName = firstName
-	}
-	if lastName, ok := profileData["localizedLastName"].(string); ok {
-		linkedInUser.LastName = lastName
 	}
 
 	// Запрос email пользователя
@@ -92,15 +67,6 @@ func HandleLinkedInCallback(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	defer emailResp.Body.Close()
-
-	// Проверка кода ответа от LinkedIn API
-	if emailResp.StatusCode != http.StatusOK {
-		http.Error(w, "Не удалось получить корректный ответ от LinkedIn API для email", http.StatusInternalServerError)
-		return
-	}
-
-	// Логируем ответ для отладки
-	log.Println("Ответ от LinkedIn (email):", emailResp)
 
 	// Структура для email ответа
 	type EmailResponse struct {
@@ -121,12 +87,6 @@ func HandleLinkedInCallback(w http.ResponseWriter, r *http.Request) {
 	if len(emailData.Elements) > 0 {
 		linkedInUser.Email = emailData.Elements[0].HandleTilde.EmailAddress
 	}
-
-	// Сохранение токена в структуре пользователя
-	linkedInUser.AccessToken = token.AccessToken
-
-	// Логируем данные пользователя перед сохранением
-	log.Println("Данные пользователя перед сохранением:", linkedInUser)
 
 	// Сохранение данных в базу данных
 	if err := config.DB.Create(&linkedInUser).Error; err != nil {

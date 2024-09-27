@@ -2,16 +2,16 @@ package controllers
 
 import (
 	"context"
-	"crypto/rsa"
 	"encoding/json"
 	"fmt"
-	"github.com/dgrijalva/jwt-go" // Import for JWT handling
+	"github.com/dgrijalva/jwt-go"
 	"golang.org/x/oauth2"
 	"golang.org/x/oauth2/linkedin"
 	"hired-valley-backend/config"
 	"hired-valley-backend/models"
 	"net/http"
 	"os"
+	"time"
 )
 
 var linkedinOAuthConfig = &oauth2.Config{
@@ -32,9 +32,8 @@ func HandleLinkedInLogin(w http.ResponseWriter, r *http.Request) {
 func HandleLinkedInCallback(w http.ResponseWriter, r *http.Request) {
 	// Получение кода авторизации
 	code := r.URL.Query().Get("code")
-	state := r.URL.Query().Get("state")
-	if code == "" || state == "" {
-		http.Error(w, "Код авторизации или состояние отсутствуют", http.StatusBadRequest)
+	if code == "" {
+		http.Error(w, "Код авторизации отсутствует", http.StatusBadRequest)
 		return
 	}
 
@@ -45,17 +44,17 @@ func HandleLinkedInCallback(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Извлечение id_token из ответа
-	idToken, err := extractIDToken(token)
+	// Получение id_token из токена
+	idToken, err := extractIDToken(token.Extra("id_token").(string))
 	if err != nil {
-		http.Error(w, "Не удалось извлечь id_token: "+err.Error(), http.StatusInternalServerError)
+		http.Error(w, "Ошибка при извлечении id_token: "+err.Error(), http.StatusInternalServerError)
 		return
 	}
 
-	// Декодирование id_token
+	// Декодирование данных пользователя
 	var linkedInUser models.LinkedInUser
-	if err := decodeIDToken(idToken, &linkedInUser); err != nil {
-		http.Error(w, "Ошибка при декодировании id_token: "+err.Error(), http.StatusInternalServerError)
+	if err := json.Unmarshal(idToken, &linkedInUser); err != nil {
+		http.Error(w, "Ошибка при декодировании данных пользователя: "+err.Error(), http.StatusInternalServerError)
 		return
 	}
 
@@ -69,68 +68,20 @@ func HandleLinkedInCallback(w http.ResponseWriter, r *http.Request) {
 	fmt.Fprintf(w, "Добро пожаловать, %s %s! Ваш email: %s", linkedInUser.FirstName, linkedInUser.LastName, linkedInUser.Email)
 }
 
-// Функция для извлечения id_token из access_token
-func extractIDToken(token *oauth2.Token) (string, error) {
-	idToken := token.Extra("id_token")
-	if idTokenStr, ok := idToken.(string); ok {
-		return idTokenStr, nil
-	}
-	return "", fmt.Errorf("id_token не найден")
-}
-
-func decodeIDToken(idToken string, user *models.LinkedInUser) error {
-	// Парсинг JWT
-	tkn, err := jwt.Parse(idToken, func(token *jwt.Token) (interface{}, error) {
-		// Проверка алгоритма
-		if _, ok := token.Method.(*jwt.SigningMethodRSA); !ok {
-			return nil, fmt.Errorf("недействительный метод подписи")
-		}
-
-		// Получение открытого ключа LinkedIn
-		keySet, err := getLinkedInPublicKeys()
-		if err != nil {
-			return nil, err
-		}
-
-		// Получение kid из токена
-		if kid, ok := token.Header["kid"].(string); ok {
-			if key, ok := keySet[kid]; ok {
-				return key, nil
-			}
-		}
-		return nil, fmt.Errorf("ключ не найден")
-	})
-
-	if err != nil {
-		return err
-	}
-
-	if claims, ok := tkn.Claims.(jwt.MapClaims); ok && tkn.Valid {
-		user.FirstName = claims["given_name"].(string)
-		user.LastName = claims["family_name"].(string)
-		user.Email = claims["email"].(string)
-		return nil
-	}
-
-	return fmt.Errorf("недействительный токен")
-}
-
-// Функция для получения публичных ключей LinkedIn
-func getLinkedInPublicKeys() (map[string]*rsa.PublicKey, error) {
-	resp, err := http.Get("https://api.linkedin.com/v2/publicKeys")
+// extractIDToken извлекает информацию пользователя из id_token
+func extractIDToken(idToken string) (json.RawMessage, error) {
+	token, err := jwt.Parse(idToken, nil)
 	if err != nil {
 		return nil, err
 	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("ошибка при получении публичных ключей: %s", resp.Status)
+	if claims, ok := token.Claims.(jwt.MapClaims); ok && token.Valid {
+		userInfo := map[string]interface{}{
+			"firstName": claims["given_name"],
+			"lastName":  claims["family_name"],
+			"email":     claims["email"],
+			"exp":       time.Unix(int64(claims["exp"].(float64)), 0),
+		}
+		return json.Marshal(userInfo)
 	}
-
-	var keySet map[string]*rsa.PublicKey
-	if err := json.NewDecoder(resp.Body).Decode(&keySet); err != nil {
-		return nil, err
-	}
-
-	return keySet, nil
+	return nil, fmt.Errorf("invalid token")
 }

@@ -28,6 +28,7 @@ func main() {
 
 	// Настройка маршрутов
 	http.HandleFunc("/", handleHome)
+	http.HandleFunc("/", controllers.HandleLinkedInHome)
 	http.HandleFunc("/login/google", controllers.HandleGoogleLogin)
 	http.HandleFunc("/callback/google", controllers.HandleGoogleCallback)
 	http.HandleFunc("/login/linkedin", controllers.HandleLinkedInLogin)       // LinkedIn login

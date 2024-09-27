@@ -4,14 +4,12 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"github.com/dgrijalva/jwt-go"
 	"golang.org/x/oauth2"
 	"golang.org/x/oauth2/linkedin"
 	"hired-valley-backend/config"
 	"hired-valley-backend/models"
 	"net/http"
 	"os"
-	"time"
 )
 
 var linkedinOAuthConfig = &oauth2.Config{
@@ -44,18 +42,50 @@ func HandleLinkedInCallback(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Получение id_token из токена
-	idToken, err := extractIDToken(token.Extra("id_token").(string))
+	// Создание клиента для запросов к LinkedIn API
+	client := linkedinOAuthConfig.Client(context.Background(), token)
+
+	// Запрос данных профиля пользователя
+	resp, err := client.Get("https://api.linkedin.com/v2/me")
 	if err != nil {
-		http.Error(w, "Ошибка при извлечении id_token: "+err.Error(), http.StatusInternalServerError)
+		http.Error(w, "Не удалось получить данные профиля: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
+	defer resp.Body.Close()
+
+	// Декодирование данных профиля
+	var linkedInUser models.LinkedInUser
+	if err := json.NewDecoder(resp.Body).Decode(&linkedInUser); err != nil {
+		http.Error(w, "Ошибка при декодировании данных профиля: "+err.Error(), http.StatusInternalServerError)
 		return
 	}
 
-	// Декодирование данных пользователя
-	var linkedInUser models.LinkedInUser
-	if err := json.Unmarshal(idToken, &linkedInUser); err != nil {
-		http.Error(w, "Ошибка при декодировании данных пользователя: "+err.Error(), http.StatusInternalServerError)
+	// Запрос email пользователя
+	emailResp, err := client.Get("https://api.linkedin.com/v2/emailAddress?q=members&projection=(elements*(handle~))")
+	if err != nil {
+		http.Error(w, "Не удалось получить email: "+err.Error(), http.StatusInternalServerError)
 		return
+	}
+	defer emailResp.Body.Close()
+
+	// Структура для email ответа
+	type EmailResponse struct {
+		Elements []struct {
+			HandleTilde struct {
+				EmailAddress string `json:"emailAddress"`
+			} `json:"handle~"`
+		} `json:"elements"`
+	}
+
+	var emailData EmailResponse
+	if err := json.NewDecoder(emailResp.Body).Decode(&emailData); err != nil {
+		http.Error(w, "Ошибка при декодировании email: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	// Сохранение email в структуре пользователя
+	if len(emailData.Elements) > 0 {
+		linkedInUser.Email = emailData.Elements[0].HandleTilde.EmailAddress
 	}
 
 	// Сохранение данных в базу данных
@@ -66,22 +96,4 @@ func HandleLinkedInCallback(w http.ResponseWriter, r *http.Request) {
 
 	// Отображение данных пользователя
 	fmt.Fprintf(w, "Добро пожаловать, %s %s! Ваш email: %s", linkedInUser.FirstName, linkedInUser.LastName, linkedInUser.Email)
-}
-
-// extractIDToken извлекает информацию пользователя из id_token
-func extractIDToken(idToken string) (json.RawMessage, error) {
-	token, err := jwt.Parse(idToken, nil)
-	if err != nil {
-		return nil, err
-	}
-	if claims, ok := token.Claims.(jwt.MapClaims); ok && token.Valid {
-		userInfo := map[string]interface{}{
-			"firstName": claims["given_name"],
-			"lastName":  claims["family_name"],
-			"email":     claims["email"],
-			"exp":       time.Unix(int64(claims["exp"].(float64)), 0),
-		}
-		return json.Marshal(userInfo)
-	}
-	return nil, fmt.Errorf("invalid token")
 }

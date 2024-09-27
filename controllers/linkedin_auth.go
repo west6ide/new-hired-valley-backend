@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"golang.org/x/oauth2"
 	"golang.org/x/oauth2/linkedin"
-	"gorm.io/gorm"
+	"hired-valley-backend/config"
 	"hired-valley-backend/models"
 	"net/http"
 	"os"
@@ -90,7 +90,7 @@ func HandleLinkedInLogin(w http.ResponseWriter, r *http.Request) {
 }
 
 // Обработчик для обратного вызова LinkedIn
-func HandleLinkedInCallback(w http.ResponseWriter, r *http.Request, db *gorm.DB) {
+func HandleLinkedInCallback(w http.ResponseWriter, r *http.Request) {
 	code := r.URL.Query().Get("code")
 	token, err := linkedinOAuthConfig.Exchange(context.Background(), code)
 	if err != nil {
@@ -120,7 +120,7 @@ func HandleLinkedInCallback(w http.ResponseWriter, r *http.Request, db *gorm.DB)
 		LastName:   profile.LastName,
 		Email:      profile.Email,
 	}
-	if err := db.Create(&user).Error; err != nil {
+	if err := config.DB.Create(&user).Error; err != nil {
 		http.Error(w, "Не удалось сохранить пользователя в базу данных", http.StatusInternalServerError)
 		return
 	}

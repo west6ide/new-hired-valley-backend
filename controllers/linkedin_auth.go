@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"golang.org/x/oauth2"
 	"golang.org/x/oauth2/linkedin"
-	"hired-valley-backend/config"
+	"gorm.io/gorm"
 	"hired-valley-backend/models"
 	"net/http"
 	"os"
@@ -17,7 +17,7 @@ var linkedinOAuthConfig = &oauth2.Config{
 	ClientID:     os.Getenv("LINKEDIN_CLIENT_ID"),
 	ClientSecret: os.Getenv("LINKEDIN_CLIENT_SECRET"),
 	RedirectURL:  os.Getenv("LINKEDIN_REDIRECT_URL"),
-	Scopes:       []string{"openid", "profile", "email"},
+	Scopes:       []string{"r_liteprofile", "r_emailaddress"},
 	Endpoint:     linkedin.Endpoint,
 }
 
@@ -26,92 +26,106 @@ type LinkedInProfile struct {
 	ID        string `json:"id"`
 	FirstName string `json:"localizedFirstName"`
 	LastName  string `json:"localizedLastName"`
+	Email     string `json:"emailAddress"`
 }
 
 // Структура для ответа с email
 type EmailResponse struct {
 	Elements []struct {
-		HandleTilde struct {
+		Handle struct {
 			EmailAddress string `json:"emailAddress"`
 		} `json:"handle~"`
 	} `json:"elements"`
 }
 
-// Обработчик для начала авторизации через LinkedIn
+// Функция для получения email пользователя из LinkedIn
+func getEmail(accessToken string) (string, error) {
+	req, err := http.NewRequest("GET", "https://api.linkedin.com/v2/emailAddress?q=members&projection=(elements*(handle~))", nil)
+	if err != nil {
+		return "", err
+	}
+	req.Header.Set("Authorization", "Bearer "+accessToken)
+	client := &http.Client{}
+	resp, err := client.Do(req)
+	if err != nil {
+		return "", err
+	}
+	defer resp.Body.Close()
+
+	var emailResp EmailResponse
+	if err := json.NewDecoder(resp.Body).Decode(&emailResp); err != nil {
+		return "", err
+	}
+	if len(emailResp.Elements) > 0 {
+		return emailResp.Elements[0].Handle.EmailAddress, nil
+	}
+	return "", fmt.Errorf("email not found")
+}
+
+// Функция для получения профиля пользователя из LinkedIn
+func getProfile(accessToken string) (*LinkedInProfile, error) {
+	req, err := http.NewRequest("GET", "https://api.linkedin.com/v2/me", nil)
+	if err != nil {
+		return nil, err
+	}
+	req.Header.Set("Authorization", "Bearer "+accessToken)
+	client := &http.Client{}
+	resp, err := client.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	var profile LinkedInProfile
+	if err := json.NewDecoder(resp.Body).Decode(&profile); err != nil {
+		return nil, err
+	}
+	return &profile, nil
+}
+
+// Функция для обработки авторизации
 func HandleLinkedInLogin(w http.ResponseWriter, r *http.Request) {
 	url := linkedinOAuthConfig.AuthCodeURL("state", oauth2.AccessTypeOffline)
 	http.Redirect(w, r, url, http.StatusTemporaryRedirect)
 }
 
-// Обработчик для получения токена и данных пользователя
-func HandleLinkedInCallback(w http.ResponseWriter, r *http.Request) {
-	// Получение кода авторизации
+// Обработчик для обратного вызова LinkedIn
+func HandleLinkedInCallback(w http.ResponseWriter, r *http.Request, db *gorm.DB) {
 	code := r.URL.Query().Get("code")
-	if code == "" {
-		http.Error(w, "Код авторизации отсутствует", http.StatusBadRequest)
-		return
-	}
-
-	// Получение токена
 	token, err := linkedinOAuthConfig.Exchange(context.Background(), code)
 	if err != nil {
-		http.Error(w, "Не удалось получить токен: "+err.Error(), http.StatusInternalServerError)
+		http.Error(w, "Не удалось обменять код на токен", http.StatusInternalServerError)
 		return
 	}
 
-	// Создание клиента для запросов к LinkedIn API
-	client := linkedinOAuthConfig.Client(context.Background(), token)
-
-	// Запрос данных профиля пользователя
-	resp, err := client.Get("https://api.linkedin.com/v2/me?projection=(id,localizedFirstName,localizedLastName)")
+	// Получение профиля пользователя LinkedIn
+	profile, err := getProfile(token.AccessToken)
 	if err != nil {
-		http.Error(w, "Не удалось получить данные профиля: "+err.Error(), http.StatusInternalServerError)
-		return
-	}
-	defer resp.Body.Close()
-
-	// Декодирование данных профиля
-	var linkedInProfile LinkedInProfile
-	if err := json.NewDecoder(resp.Body).Decode(&linkedInProfile); err != nil {
-		http.Error(w, "Ошибка при декодировании данных профиля: "+err.Error(), http.StatusInternalServerError)
+		http.Error(w, "Не удалось получить профиль LinkedIn", http.StatusInternalServerError)
 		return
 	}
 
-	// Запрос email пользователя
-	emailResp, err := client.Get("https://api.linkedin.com/v2/emailAddress?q=members&projection=(elements*(handle~))")
+	// Получение email пользователя LinkedIn
+	email, err := getEmail(token.AccessToken)
 	if err != nil {
-		http.Error(w, "Не удалось получить email: "+err.Error(), http.StatusInternalServerError)
+		http.Error(w, "Не удалось получить email LinkedIn", http.StatusInternalServerError)
 		return
 	}
-	defer emailResp.Body.Close()
+	profile.Email = email
 
-	// Декодирование email данных
-	var emailData EmailResponse
-	if err := json.NewDecoder(emailResp.Body).Decode(&emailData); err != nil {
-		http.Error(w, "Ошибка при декодировании email: "+err.Error(), http.StatusInternalServerError)
-		return
-	}
-
-	// Получение email
-	var email string
-	if len(emailData.Elements) > 0 {
-		email = emailData.Elements[0].HandleTilde.EmailAddress
-	}
-
-	// Создание структуры пользователя
+	// Сохранение данных пользователя в базу данных
 	user := models.LinkedInUser{
-		LinkedInID: linkedInProfile.ID,
-		FirstName:  linkedInProfile.FirstName,
-		LastName:   linkedInProfile.LastName,
-		Email:      email,
+		LinkedInID: profile.ID,
+		FirstName:  profile.FirstName,
+		LastName:   profile.LastName,
+		Email:      profile.Email,
 	}
-
-	// Сохранение данных пользователя в базу
-	if err := config.DB.FirstOrCreate(&user, models.LinkedInUser{LinkedInID: linkedInProfile.ID}).Error; err != nil {
-		http.Error(w, "Ошибка при сохранении данных в базу: "+err.Error(), http.StatusInternalServerError)
+	if err := db.Create(&user).Error; err != nil {
+		http.Error(w, "Не удалось сохранить пользователя в базу данных", http.StatusInternalServerError)
 		return
 	}
 
-	// Отображение данных пользователя
-	fmt.Fprintf(w, "Добро пожаловать, %s %s! Ваш email: %s", user.FirstName, user.LastName, user.Email)
+	// Ответ клиенту
+	w.WriteHeader(http.StatusOK)
+	fmt.Fprintf(w, "Пользователь успешно авторизован: %s %s", profile.FirstName, profile.LastName)
 }

@@ -2,8 +2,8 @@ package controllers
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
+	"github.com/dgrijalva/jwt-go" // Import for JWT handling
 	"golang.org/x/oauth2"
 	"golang.org/x/oauth2/linkedin"
 	"hired-valley-backend/config"
@@ -30,8 +30,9 @@ func HandleLinkedInLogin(w http.ResponseWriter, r *http.Request) {
 func HandleLinkedInCallback(w http.ResponseWriter, r *http.Request) {
 	// Получение кода авторизации
 	code := r.URL.Query().Get("code")
-	if code == "" {
-		http.Error(w, "Код авторизации отсутствует", http.StatusBadRequest)
+	state := r.URL.Query().Get("state")
+	if code == "" || state == "" {
+		http.Error(w, "Код авторизации или состояние отсутствуют", http.StatusBadRequest)
 		return
 	}
 
@@ -42,50 +43,18 @@ func HandleLinkedInCallback(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Создание клиента для запросов к LinkedIn API
-	client := linkedinOAuthConfig.Client(context.Background(), token)
-
-	// Запрос данных профиля пользователя
-	resp, err := client.Get("https://api.linkedin.com/v2/me")
+	// Извлечение id_token из ответа
+	idToken, err := extractIDToken(token)
 	if err != nil {
-		http.Error(w, "Не удалось получить данные профиля: "+err.Error(), http.StatusInternalServerError)
+		http.Error(w, "Не удалось извлечь id_token: "+err.Error(), http.StatusInternalServerError)
 		return
 	}
-	defer resp.Body.Close()
 
-	// Декодирование данных профиля
+	// Декодирование id_token
 	var linkedInUser models.LinkedInUser
-	if err := json.NewDecoder(resp.Body).Decode(&linkedInUser); err != nil {
-		http.Error(w, "Ошибка при декодировании данных профиля: "+err.Error(), http.StatusInternalServerError)
+	if err := decodeIDToken(idToken, &linkedInUser); err != nil {
+		http.Error(w, "Ошибка при декодировании id_token: "+err.Error(), http.StatusInternalServerError)
 		return
-	}
-
-	// Запрос email пользователя
-	emailResp, err := client.Get("https://api.linkedin.com/v2/emailAddress?q=members&projection=(elements*(handle~))")
-	if err != nil {
-		http.Error(w, "Не удалось получить email: "+err.Error(), http.StatusInternalServerError)
-		return
-	}
-	defer emailResp.Body.Close()
-
-	// Структура для email ответа
-	type EmailResponse struct {
-		Elements []struct {
-			HandleTilde struct {
-				EmailAddress string `json:"emailAddress"`
-			} `json:"handle~"`
-		} `json:"elements"`
-	}
-
-	var emailData EmailResponse
-	if err := json.NewDecoder(emailResp.Body).Decode(&emailData); err != nil {
-		http.Error(w, "Ошибка при декодировании email: "+err.Error(), http.StatusInternalServerError)
-		return
-	}
-
-	// Сохранение email в структуре пользователя
-	if len(emailData.Elements) > 0 {
-		linkedInUser.Email = emailData.Elements[0].HandleTilde.EmailAddress
 	}
 
 	// Сохранение данных в базу данных
@@ -96,4 +65,34 @@ func HandleLinkedInCallback(w http.ResponseWriter, r *http.Request) {
 
 	// Отображение данных пользователя
 	fmt.Fprintf(w, "Добро пожаловать, %s %s! Ваш email: %s", linkedInUser.FirstName, linkedInUser.LastName, linkedInUser.Email)
+}
+
+// Функция для извлечения id_token из access_token
+func extractIDToken(token *oauth2.Token) (string, error) {
+	idToken := token.Extra("id_token")
+	if idTokenStr, ok := idToken.(string); ok {
+		return idTokenStr, nil
+	}
+	return "", fmt.Errorf("id_token не найден")
+}
+
+// Функция для декодирования id_token и получения данных пользователя
+func decodeIDToken(idToken string, user *models.LinkedInUser) error {
+	// Проверка и декодирование JWT
+	tkn, err := jwt.Parse(idToken, func(token *jwt.Token) (interface{}, error) {
+		// Здесь можно добавить проверку алгоритма и прочее
+		return []byte(os.Getenv("LINKEDIN_CLIENT_SECRET")), nil // Используйте ваш секретный ключ
+	})
+	if err != nil {
+		return err
+	}
+
+	if claims, ok := tkn.Claims.(jwt.MapClaims); ok && tkn.Valid {
+		user.FirstName = claims["given_name"].(string)
+		user.LastName = claims["family_name"].(string)
+		user.Email = claims["email"].(string)
+		return nil
+	}
+
+	return fmt.Errorf("недействительный токен")
 }

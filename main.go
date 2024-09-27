@@ -21,7 +21,10 @@ func main() {
 
 	// Инициализация базы данных
 	config.InitDB()
-	config.DB.AutoMigrate(&models.GoogleUser{}, &models.User{}, &models.LinkedInUser{}) // Добавление миграции для LinkedInUser
+	err := config.DB.AutoMigrate(&models.GoogleUser{}, &models.User{}, &models.LinkedInUser{})
+	if err != nil {
+		return
+	} // Добавление миграции для LinkedInUser
 
 	r := gin.Default()
 	routes.RegisterStoryRoutes(r, config.DB)

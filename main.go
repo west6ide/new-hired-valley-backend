@@ -8,8 +8,6 @@ import (
 	"hired-valley-backend/models"
 	"net/http"
 	"os"
-
-	"github.com/markbates/goth/gothic"
 )
 
 func main() {
@@ -26,26 +24,21 @@ func main() {
 		return
 	} // Добавление миграции для LinkedInUser
 
-	// Инициализация провайдеров авторизации
-
 	// Настройка маршрутов
 	http.HandleFunc("/", handleHome)
 	http.HandleFunc("/login/google", controllers.HandleGoogleLogin)
 	http.HandleFunc("/callback/google", controllers.HandleGoogleCallback)
-	http.HandleFunc("/auth/linkedin", handleLinkedInLogin)             // Маршрут для авторизации через LinkedIn
-	http.HandleFunc("/auth/linkedin/callback", handleLinkedInCallback) // Маршрут для обратного вызова LinkedIn
+	//http.HandleFunc("/login/linkedin", controllers.HandleLinkedInLogin)       // LinkedIn login
+	//http.HandleFunc("/callback/linkedin", controllers.HandleLinkedInCallback) // LinkedIn callback
 	http.HandleFunc("/register", controllers.Register)
 	http.HandleFunc("/login", controllers.Login)
 	http.HandleFunc("/api/profile", controllers.GetProfile)
 	http.HandleFunc("/api/logout", controllers.Logout)
 
-	// Маршрут для обработки запросов к провайдерам Goth
-	http.HandleFunc("/auth/", gothic.BeginAuthHandler)
-
 	// Запуск сервера
 	c := httpCors.CorsSettings()
 	handler := c.Handler(http.DefaultServeMux)
-	http.ListenAndServe(":"+port, handler)
+	http.ListenAndServe(":8080", handler)
 }
 
 // Обработчик домашней страницы
@@ -66,51 +59,8 @@ func handleHome(w http.ResponseWriter, r *http.Request) {
 	} else {
 		html := `<html><body>
                    <a href="/login/google">Войти через Google</a><br>
-                   <a href="/auth/linkedin">Войти через LinkedIn</a>
+                   <a href="/login/linkedin">Войти через LinkedIn</a>
                  </body></html>`
 		fmt.Fprint(w, html)
 	}
-}
-
-// Обработчик для начала авторизации через LinkedIn
-func handleLinkedInLogin(w http.ResponseWriter, r *http.Request) {
-	gothic.BeginAuthHandler(w, r) // Использует провайдера LinkedIn по маршруту
-}
-
-// Обработчик для получения токена и данных пользователя после обратного вызова
-func handleLinkedInCallback(w http.ResponseWriter, r *http.Request) {
-	// Завершение процесса авторизации и получение данных пользователя
-	user, err := gothic.CompleteUserAuth(w, r)
-	if err != nil {
-		http.Error(w, "Ошибка при завершении авторизации: "+err.Error(), http.StatusInternalServerError)
-		return
-	}
-
-	// Создание структуры LinkedInUser из полученных данных
-	linkedInUser := models.LinkedInUser{
-		FirstName: user.FirstName,
-		LastName:  user.LastName,
-		Email:     user.Email,
-	}
-
-	// Сохранение данных пользователя в базу данных
-	if err := config.DB.Create(&linkedInUser).Error; err != nil {
-		http.Error(w, "Ошибка при сохранении данных пользователя в базу: "+err.Error(), http.StatusInternalServerError)
-		return
-	}
-
-	// Сохранение токена в базу данных
-	oauthToken := models.OAuthToken{
-		UserID:      linkedInUser.ID,
-		AccessToken: user.AccessToken,
-		TokenType:   "Bearer",
-	}
-
-	if err := config.DB.Create(&oauthToken).Error; err != nil {
-		http.Error(w, "Ошибка при сохранении токена в базу: "+err.Error(), http.StatusInternalServerError)
-		return
-	}
-
-	// Отображение данных пользователя
-	fmt.Fprintf(w, "Добро пожаловать, %s %s! Ваш email: %s", linkedInUser.FirstName, linkedInUser.LastName, linkedInUser.Email)
 }

@@ -69,7 +69,7 @@ func handleHome(w http.ResponseWriter, r *http.Request) {
 	} else {
 		html := `<html><body>
                    <a href="/login/google">Войти через Google</a><br>
-                   <a href="/login/linkedin">Войти через LinkedIn</a>
+                   <a href="/logout/{provider}">Войти через LinkedIn</a>
                  </body></html>`
 		fmt.Fprint(w, html)
 	}

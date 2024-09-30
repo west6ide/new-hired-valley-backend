@@ -2,12 +2,11 @@ package main
 
 import (
 	"fmt"
-	"github.com/gin-gonic/gin"
+	"github.com/gorilla/pat"
 	"hired-valley-backend/config"
 	"hired-valley-backend/controllers"
 	"hired-valley-backend/controllers/httpCors"
 	"hired-valley-backend/models"
-	"hired-valley-backend/routes"
 	"net/http"
 	"os"
 )
@@ -26,19 +25,25 @@ func main() {
 		return
 	} // Добавление миграции для LinkedInUser
 
-	r := gin.Default()
-	routes.RegisterStoryRoutes(r, config.DB)
-
 	// Настройка маршрутов
 	http.HandleFunc("/", handleHome)
 	http.HandleFunc("/login/google", controllers.HandleGoogleLogin)
 	http.HandleFunc("/callback/google", controllers.HandleGoogleCallback)
-	http.HandleFunc("/login/linkedin", controllers.HandleLinkedInLogin)       // LinkedIn login
-	http.HandleFunc("/callback/linkedin", controllers.HandleLinkedInCallback) // LinkedIn callback
+	//http.HandleFunc("/login/linkedin", controllers.HandleLinkedInLogin)       // LinkedIn login
+	//http.HandleFunc("/callback/linkedin", controllers.HandleLinkedInCallback) // LinkedIn callback
 	http.HandleFunc("/register", controllers.Register)
 	http.HandleFunc("/login", controllers.Login)
 	http.HandleFunc("/api/profile", controllers.GetProfile)
 	http.HandleFunc("/api/logout", controllers.Logout)
+
+	controllers.InitAuthProviders()
+
+	// Настройка маршрутов
+	p := pat.New()
+	p.Get("/auth/{provider}/callback", controllers.AuthCallbackHandler)
+	p.Get("/logout/{provider}", controllers.LogoutHandler)
+	p.Get("/auth/{provider}", controllers.AuthHandler)
+	p.Get("/", controllers.HomeHandler)
 
 	// Запуск сервера
 	c := httpCors.CorsSettings()

@@ -1,54 +1,77 @@
-// models/story.go
-
 package models
 
 import (
+	"hired-valley-backend/config"
+	"hired-valley-backend/controllers"
+	"net/http"
+	"path/filepath"
 	"time"
 
-	"gorm.io/gorm"
+	"github.com/gin-gonic/gin"
 )
 
-type Story struct {
-	ID        uint      `json:"id" gorm:"primaryKey"`
-	UserID    uint      `json:"user_id"`
-	Content   string    `json:"content"`
-	CreatedAt time.Time `json:"created_at"`
-	ExpiresAt time.Time `json:"expires_at"`
+type CreateStoryInput struct {
+	UserID uint `json:"user_id"`
 }
 
-// Создание истории в базе данных
-func CreateStory(db *gorm.DB, story *Story) error {
-	story.CreatedAt = time.Now()
-	story.ExpiresAt = story.CreatedAt.Add(24 * time.Hour)
-	return db.Create(story).Error
+func GetStories(c *gin.Context) {
+	var stories []controllers.Claims
+	now := time.Now()
+
+	// Получение всех активных историй (которые не истекли)
+	if err := config.DB.Where("expiry_at > ?", now).Preload("User").Find(&stories).Error; err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Could not fetch stories"})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"data": stories})
 }
 
-// Получение всех актуальных историй
-func GetActiveStories(db *gorm.DB) ([]Story, error) {
-	var stories []Story
-	err := db.Find(&stories).Error
+func CreateStory(c *gin.Context) {
+	var input CreateStoryInput
+
+	// Проверка на валидность входных данных
+	if err := c.ShouldBindJSON(&input); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	// Получение файла
+	file, err := c.FormFile("file")
 	if err != nil {
-		return nil, err
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Failed to upload file"})
+		return
 	}
 
-	var validStories []Story
-	for _, story := range stories {
-		if story.ExpiresAt.After(time.Now()) {
-			validStories = append(validStories, story)
-		}
+	// Сохранение файла
+	filename := filepath.Base(file.Filename)
+	filepath := "uploads/" + filename
+	if err := c.SaveUploadedFile(file, filepath); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Could not save file"})
+		return
 	}
 
-	return validStories, nil
+	// Создание истории
+	story := GoogleUser{
+		ID: input.UserID,
+	}
+
+	if err := config.DB.Create(&story).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create story"})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"data": story})
 }
 
-// Получение истории по ID
-func GetStoryByID(db *gorm.DB, id string) *Story {
-	var story Story
-	if err := db.First(&story, id).Error; err != nil {
-		return nil
+func DeleteExpiredStories(c *gin.Context) {
+	now := time.Now()
+
+	// Удаление всех историй, срок которых истек
+	if err := config.DB.Where("expiry_at <= ?", now).Delete(&controllers.Claims{}).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to delete expired stories"})
+		return
 	}
-	if story.ExpiresAt.Before(time.Now()) {
-		return nil // История истекла
-	}
-	return &story
+
+	c.JSON(http.StatusOK, gin.H{"message": "Expired stories deleted"})
 }

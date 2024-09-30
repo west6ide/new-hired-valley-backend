@@ -11,7 +11,7 @@ import (
 )
 
 // homeHandler обрабатывает запросы к главной странице
-func HomeHandler(res http.ResponseWriter) {
+func HomeHandler(res http.ResponseWriter, request *http.Request) {
 	providers := getAuthProviders()
 	t, err := template.New("index").Parse(indexTemplate)
 	if err != nil {

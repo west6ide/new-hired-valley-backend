@@ -19,7 +19,7 @@ func main() {
 
 	// Инициализация базы данных
 	config.InitDB()
-	err := config.DB.AutoMigrate(&models.GoogleUser{}, &models.User{}, &models.LinkedInUser{})
+	err := config.DB.AutoMigrate(&models.GoogleUser{}, &models.User{}, &models.LinkedInUser{}, &models.OAuthToken{})
 	if err != nil {
 		return
 	} // Добавление миграции для LinkedInUser

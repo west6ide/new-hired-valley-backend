@@ -28,8 +28,8 @@ func main() {
 	http.HandleFunc("/", handleHome)
 	http.HandleFunc("/login/google", controllers.HandleGoogleLogin)
 	http.HandleFunc("/callback/google", controllers.HandleGoogleCallback)
-	//http.HandleFunc("/login/linkedin", controllers.HandleLinkedInLogin)       // LinkedIn login
-	//http.HandleFunc("/callback/linkedin", controllers.HandleLinkedInCallback) // LinkedIn callback
+	http.HandleFunc("/login/linkedin", controllers.HandleLinkedInLogin)       // LinkedIn login
+	http.HandleFunc("/callback/linkedin", controllers.HandleLinkedInCallback) // LinkedIn callback
 	http.HandleFunc("/register", controllers.Register)
 	http.HandleFunc("/login", controllers.Login)
 	http.HandleFunc("/api/profile", controllers.GetProfile)

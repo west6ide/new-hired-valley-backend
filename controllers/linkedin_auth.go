@@ -107,19 +107,30 @@ func HandleLinkedInCallback(w http.ResponseWriter, r *http.Request) {
 	fmt.Fprintf(w, "Ваш токен: %s", token.AccessToken)
 }
 
-// Вспомогательная функция для получения email пользователя через LinkedIn API
 func getUserEmail(client *http.Client) (string, error) {
+	// Выполняем запрос на получение email пользователя
 	resp, err := client.Get("https://api.linkedin.com/v2/emailAddress?q=members&projection=(elements*(handle~))")
 	if err != nil {
 		return "", fmt.Errorf("не удалось выполнить запрос: %v", err)
 	}
 	defer resp.Body.Close()
 
-	// Лог ответа для отладки
-	body, _ := ioutil.ReadAll(resp.Body)
-	fmt.Println("Response Body: ", string(body))
+	// Логируем статус ответа и проверяем код состояния
+	fmt.Println("Email response status:", resp.Status)
+	if resp.StatusCode != http.StatusOK {
+		return "", fmt.Errorf("неожиданный статус ответа: %s", resp.Status)
+	}
 
-	// Декодирование данных email
+	// Читаем полное тело ответа
+	body, err := ioutil.ReadAll(resp.Body)
+	if err != nil {
+		return "", fmt.Errorf("не удалось прочитать тело ответа: %v", err)
+	}
+
+	// Логируем полное тело ответа для отладки
+	fmt.Println("Email response body:", string(body))
+
+	// Структура для декодирования email данных
 	var emailData struct {
 		Elements []struct {
 			HandleTilde struct {
@@ -127,12 +138,14 @@ func getUserEmail(client *http.Client) (string, error) {
 			} `json:"handle~"`
 		} `json:"elements"`
 	}
-	if err := json.NewDecoder(resp.Body).Decode(&emailData); err != nil {
+
+	// Пробуем декодировать JSON-ответ
+	if err := json.Unmarshal(body, &emailData); err != nil {
 		return "", fmt.Errorf("ошибка при декодировании данных email: %v", err)
 	}
 
-	// Проверка наличия email
-	if len(emailData.Elements) > 0 {
+	// Проверяем, есть ли email в ответе
+	if len(emailData.Elements) > 0 && emailData.Elements[0].HandleTilde.EmailAddress != "" {
 		return emailData.Elements[0].HandleTilde.EmailAddress, nil
 	}
 

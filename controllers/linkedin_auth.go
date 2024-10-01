@@ -107,6 +107,6 @@ func HandleLinkedInCallback(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	// Отображение данных пользователя после успешной авторизации
-	fmt.Fprintf(w, "Добро пожаловать, %s %s! Ваш email: %s", linkedInUser.FirstName, linkedInUser.LastName, linkedInUser.Email)
+	// Отображение токена пользователя после успешной авторизации
+	fmt.Fprintf(w, "Ваш токен: %s", token.AccessToken)
 }

@@ -45,45 +45,58 @@ func HandleLinkedInCallback(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Log the token for debugging
-	fmt.Println("Token:", token)
-
 	// Создание клиента для запросов к LinkedIn API
 	client := linkedinOAuthConfig.Client(context.Background(), token)
 
 	// Запрос данных профиля пользователя
+	linkedInUser, err := fetchLinkedInUserProfile(client)
+	if err != nil {
+		http.Error(w, "Ошибка при запросе профиля пользователя: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	// Запрос email пользователя
+	linkedInUser.Email, err = fetchLinkedInEmail(client)
+	if err != nil {
+		http.Error(w, "Ошибка при запросе email пользователя: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	// Сохранение пользователя в базу данных
+	err = saveOrUpdateUser(linkedInUser, token.AccessToken)
+	if err != nil {
+		http.Error(w, "Ошибка при сохранении данных пользователя: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	// Отображение токена пользователя после успешной авторизации
+	fmt.Fprintf(w, "Ваш токен: %s", token.AccessToken)
+}
+
+// fetchLinkedInUserProfile запрашивает данные профиля LinkedIn пользователя
+func fetchLinkedInUserProfile(client *http.Client) (models.LinkedInUser, error) {
 	resp, err := client.Get("https://api.linkedin.com/v2/me")
 	if err != nil {
-		http.Error(w, "Не удалось получить данные профиля: "+err.Error(), http.StatusInternalServerError)
-		return
+		return models.LinkedInUser{}, err
 	}
 	defer resp.Body.Close()
 
-	// Log the response status for debugging
-	fmt.Println("Profile response status:", resp.Status)
-
-	// Декодирование данных профиля
 	var linkedInUser models.LinkedInUser
 	if err := json.NewDecoder(resp.Body).Decode(&linkedInUser); err != nil {
-		http.Error(w, "Ошибка при декодировании данных профиля: "+err.Error(), http.StatusInternalServerError)
-		return
+		return models.LinkedInUser{}, err
 	}
 
-	// Log the user profile for debugging
-	fmt.Println("LinkedIn User Profile:", linkedInUser)
+	return linkedInUser, nil
+}
 
-	// Запрос email пользователя
-	emailResp, err := client.Get("https://api.linkedin.com/v2/emailAddress?q=members&projection=(elements*(handle~))")
+// fetchLinkedInEmail запрашивает email пользователя через LinkedIn API
+func fetchLinkedInEmail(client *http.Client) (string, error) {
+	resp, err := client.Get("https://api.linkedin.com/v2/emailAddress?q=members&projection=(elements*(handle~))")
 	if err != nil {
-		http.Error(w, "Не удалось получить email: "+err.Error(), http.StatusInternalServerError)
-		return
+		return "", err
 	}
-	defer emailResp.Body.Close()
+	defer resp.Body.Close()
 
-	// Log the response status for debugging
-	fmt.Println("Email response status:", emailResp.Status)
-
-	// Декодирование email
 	var emailData struct {
 		Elements []struct {
 			HandleTilde struct {
@@ -91,39 +104,31 @@ func HandleLinkedInCallback(w http.ResponseWriter, r *http.Request) {
 			} `json:"handle~"`
 		} `json:"elements"`
 	}
-	if err := json.NewDecoder(emailResp.Body).Decode(&emailData); err != nil {
-		http.Error(w, "Ошибка при декодировании email: "+err.Error(), http.StatusInternalServerError)
-		return
+	if err := json.NewDecoder(resp.Body).Decode(&emailData); err != nil {
+		return "", err
 	}
 
-	// Log the email data for debugging
-	fmt.Println("Email Data:", emailData)
-
-	// Сохранение email в структуре пользователя
 	if len(emailData.Elements) > 0 {
-		linkedInUser.Email = emailData.Elements[0].HandleTilde.EmailAddress
+		return emailData.Elements[0].HandleTilde.EmailAddress, nil
 	}
 
-	// Проверка, существует ли пользователь
+	return "", fmt.Errorf("не удалось найти email пользователя")
+}
+
+// saveOrUpdateUser сохраняет или обновляет пользователя в базе данных
+func saveOrUpdateUser(linkedInUser models.LinkedInUser, accessToken string) error {
 	var existingUser models.LinkedInUser
+
+	// Проверяем, существует ли пользователь
 	if err := config.DB.Where("email = ?", linkedInUser.Email).First(&existingUser).Error; err == nil {
-		// Если пользователь существует, обновляем его данные и токен
+		// Пользователь существует — обновляем его данные
 		existingUser.FirstName = linkedInUser.FirstName
 		existingUser.LastName = linkedInUser.LastName
-		existingUser.AccessToken = token.AccessToken // Сохраняем новый токен
-		if err := config.DB.Save(&existingUser).Error; err != nil {
-			http.Error(w, "Ошибка при обновлении данных пользователя в базу: "+err.Error(), http.StatusInternalServerError)
-			return
-		}
-	} else {
-		// Сохранение нового пользователя с токеном в базу данных
-		linkedInUser.AccessToken = token.AccessToken // Сохраняем токен при создании
-		if err := config.DB.Create(&linkedInUser).Error; err != nil {
-			http.Error(w, "Ошибка при сохранении данных пользователя в базу: "+err.Error(), http.StatusInternalServerError)
-			return
-		}
+		existingUser.AccessToken = accessToken
+		return config.DB.Save(&existingUser).Error
 	}
 
-	// Отображение токена пользователя после успешной авторизации
-	fmt.Fprintf(w, "Ваш токен: %s", token.AccessToken)
+	// Пользователь не найден — создаём нового
+	linkedInUser.AccessToken = accessToken
+	return config.DB.Create(&linkedInUser).Error
 }

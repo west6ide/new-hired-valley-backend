@@ -27,7 +27,6 @@ func HandleLinkedInLogin(w http.ResponseWriter, r *http.Request) {
 }
 
 // Обработчик для получения токена и данных пользователя
-// Обработчик для получения токена и данных пользователя
 func HandleLinkedInCallback(w http.ResponseWriter, r *http.Request) {
 	// Получение кода авторизации
 	code := r.URL.Query().Get("code")
@@ -69,7 +68,7 @@ func HandleLinkedInCallback(w http.ResponseWriter, r *http.Request) {
 	}
 	defer emailResp.Body.Close()
 
-	// Структура для email ответа
+	// Декодирование email
 	var emailData struct {
 		Elements []struct {
 			HandleTilde struct {

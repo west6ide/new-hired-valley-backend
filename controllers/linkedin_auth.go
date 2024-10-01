@@ -90,10 +90,17 @@ func HandleLinkedInCallback(w http.ResponseWriter, r *http.Request) {
 	// Проверка, существует ли пользователь
 	var existingUser models.LinkedInUser
 	if err := config.DB.Where("email = ?", linkedInUser.Email).First(&existingUser).Error; err == nil {
-		// Если пользователь существует, используем его ID
+		// Если пользователь существует, обновляем токен и информацию о нём
 		linkedInUser.ID = existingUser.ID
+		existingUser.FirstName = linkedInUser.FirstName
+		existingUser.LastName = linkedInUser.LastName
+
+		if err := config.DB.Save(&existingUser).Error; err != nil {
+			http.Error(w, "Ошибка при обновлении данных пользователя в базу: "+err.Error(), http.StatusInternalServerError)
+			return
+		}
 	} else {
-		// Сохранение нового пользователя в базу данных
+		// Создание нового пользователя
 		if err := config.DB.Create(&linkedInUser).Error; err != nil {
 			http.Error(w, "Ошибка при сохранении данных пользователя в базу: "+err.Error(), http.StatusInternalServerError)
 			return
@@ -102,17 +109,32 @@ func HandleLinkedInCallback(w http.ResponseWriter, r *http.Request) {
 
 	// Сохранение токена в базу данных
 	oauthToken := models.OAuthToken{
-		UserID:      linkedInUser.ID, // ID пользователя, который только что сохранили
+		UserID:      linkedInUser.ID, // ID пользователя, который только что сохранили или обновили
 		AccessToken: token.AccessToken,
 		TokenType:   token.TokenType,
 		Expiry:      token.Expiry,
 	}
 
-	if err := config.DB.Create(&oauthToken).Error; err != nil {
-		http.Error(w, "Ошибка при сохранении токена в базу: "+err.Error(), http.StatusInternalServerError)
-		return
+	// Проверка, существует ли токен для данного пользователя
+	var existingToken models.OAuthToken
+	if err := config.DB.Where("user_id = ?", linkedInUser.ID).First(&existingToken).Error; err == nil {
+		// Обновление существующего токена
+		existingToken.AccessToken = oauthToken.AccessToken
+		existingToken.TokenType = oauthToken.TokenType
+		existingToken.Expiry = oauthToken.Expiry
+
+		if err := config.DB.Save(&existingToken).Error; err != nil {
+			http.Error(w, "Ошибка при обновлении токена в базу: "+err.Error(), http.StatusInternalServerError)
+			return
+		}
+	} else {
+		// Сохранение нового токена
+		if err := config.DB.Create(&oauthToken).Error; err != nil {
+			http.Error(w, "Ошибка при сохранении токена в базу: "+err.Error(), http.StatusInternalServerError)
+			return
+		}
 	}
 
-	// Отображение данных пользователя
+	// Отображение данных пользователя после успешной авторизации
 	fmt.Fprintf(w, "Добро пожаловать, %s %s! Ваш email: %s", linkedInUser.FirstName, linkedInUser.LastName, linkedInUser.Email)
 }

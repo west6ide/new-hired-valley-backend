@@ -42,6 +42,9 @@ func HandleLinkedInCallback(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Log the token for debugging
+	fmt.Println("Token:", token)
+
 	// Создание клиента для запросов к LinkedIn API
 	client := linkedinOAuthConfig.Client(context.Background(), token)
 
@@ -53,12 +56,18 @@ func HandleLinkedInCallback(w http.ResponseWriter, r *http.Request) {
 	}
 	defer resp.Body.Close()
 
+	// Log the response status for debugging
+	fmt.Println("Profile response status:", resp.Status)
+
 	// Декодирование данных профиля
 	var linkedInUser models.LinkedInUser
 	if err := json.NewDecoder(resp.Body).Decode(&linkedInUser); err != nil {
 		http.Error(w, "Ошибка при декодировании данных профиля: "+err.Error(), http.StatusInternalServerError)
 		return
 	}
+
+	// Log the user profile for debugging
+	fmt.Println("LinkedIn User Profile:", linkedInUser)
 
 	// Запрос email пользователя
 	emailResp, err := client.Get("https://api.linkedin.com/v2/emailAddress?q=members&projection=(elements*(handle~))")
@@ -67,6 +76,9 @@ func HandleLinkedInCallback(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	defer emailResp.Body.Close()
+
+	// Log the response status for debugging
+	fmt.Println("Email response status:", emailResp.Status)
 
 	// Декодирование email
 	var emailData struct {
@@ -81,6 +93,9 @@ func HandleLinkedInCallback(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Log the email data for debugging
+	fmt.Println("Email Data:", emailData)
+
 	// Сохранение email в структуре пользователя
 	if len(emailData.Elements) > 0 {
 		linkedInUser.Email = emailData.Elements[0].HandleTilde.EmailAddress
@@ -93,7 +108,6 @@ func HandleLinkedInCallback(w http.ResponseWriter, r *http.Request) {
 		existingUser.FirstName = linkedInUser.FirstName
 		existingUser.LastName = linkedInUser.LastName
 		existingUser.AccessToken = token.AccessToken // Сохраняем новый токен
-
 		if err := config.DB.Save(&existingUser).Error; err != nil {
 			http.Error(w, "Ошибка при обновлении данных пользователя в базу: "+err.Error(), http.StatusInternalServerError)
 			return

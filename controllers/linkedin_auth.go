@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"golang.org/x/oauth2"
-	"golang.org/x/oauth2/linkedin"
 	"hired-valley-backend/config"
 	"hired-valley-backend/models"
 	"net/http"
@@ -17,7 +16,11 @@ var linkedinOAuthConfig = &oauth2.Config{
 	ClientSecret: os.Getenv("LINKEDIN_CLIENT_SECRET"),
 	RedirectURL:  os.Getenv("LINKEDIN_REDIRECT_URL"),
 	Scopes:       []string{"openid", "profile", "email"},
-	Endpoint:     linkedin.Endpoint,
+	Endpoint: oauth2.Endpoint{
+		AuthURL:   "https://www.linkedin.com/oauth/v2/authorization",
+		TokenURL:  "https://www.linkedin.com/oauth/v2/accessToken",
+		AuthStyle: oauth2.AuthStyleInParams,
+	},
 }
 
 // Обработчик для начала авторизации через LinkedIn

@@ -16,11 +16,10 @@ var linkedinOAuthConfig = &oauth2.Config{
 	ClientID:     os.Getenv("LINKEDIN_CLIENT_ID"),
 	ClientSecret: os.Getenv("LINKEDIN_CLIENT_SECRET"),
 	RedirectURL:  os.Getenv("LINKEDIN_REDIRECT_URL"),
-	Scopes:       []string{"openid", "profile", "email"}, // Добавляем правильные scopes
+	Scopes:       []string{"openid", "profile", "email", "r_liteprofile", "r_emailaddress"}, // Добавляем правильные scopes
 	Endpoint: oauth2.Endpoint{
-		AuthURL:   "https://www.linkedin.com/oauth/v2/authorization",
-		TokenURL:  "https://www.linkedin.com/oauth/v2/accessToken",
-		AuthStyle: oauth2.AuthStyleInParams,
+		AuthURL:  "https://www.linkedin.com/oauth/v2/authorization",
+		TokenURL: "https://www.linkedin.com/oauth/v2/accessToken",
 	},
 }
 

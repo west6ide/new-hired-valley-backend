@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"github.com/gorilla/sessions"
 	"golang.org/x/oauth2"
 	"golang.org/x/oauth2/linkedin"
 	"hired-valley-backend/config"
@@ -12,13 +13,16 @@ import (
 	"os"
 )
 
-var linkedinOAuthConfig = &oauth2.Config{
-	ClientID:     os.Getenv("LINKEDIN_CLIENT_ID"),
-	ClientSecret: os.Getenv("LINKEDIN_CLIENT_SECRET"),
-	RedirectURL:  os.Getenv("LINKEDIN_REDIRECT_URL"),
-	Scopes:       []string{"openid", "profile", "email"},
-	Endpoint:     linkedin.Endpoint,
-}
+var (
+	linkedinOAuthConfig = &oauth2.Config{
+		ClientID:     os.Getenv("LINKEDIN_CLIENT_ID"),
+		ClientSecret: os.Getenv("LINKEDIN_CLIENT_SECRET"),
+		RedirectURL:  os.Getenv("LINKEDIN_REDIRECT_URL"),
+		Scopes:       []string{"openid", "profile", "email"},
+		Endpoint:     linkedin.Endpoint,
+	}
+	storeLinkedin = sessions.NewCookieStore([]byte("something-very-secret"))
+)
 
 // Обработчик для начала авторизации через LinkedIn
 func HandleLinkedInLogin(w http.ResponseWriter, r *http.Request) {
@@ -54,7 +58,7 @@ func HandleLinkedInCallback(w http.ResponseWriter, r *http.Request) {
 	defer resp.Body.Close()
 
 	// Декодирование данных профиля
-	var linkedInUser models.LinkedInUser
+	var linkedInUser map[string]interface{}
 	if err := json.NewDecoder(resp.Body).Decode(&linkedInUser); err != nil {
 		http.Error(w, "Ошибка при декодировании данных профиля: "+err.Error(), http.StatusInternalServerError)
 		return
@@ -83,100 +87,40 @@ func HandleLinkedInCallback(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Сохранение email в структуре пользователя
-	if len(emailData.Elements) > 0 {
-		linkedInUser.Email = emailData.Elements[0].HandleTilde.EmailAddress
+	// Получение данных пользователя
+	linkedInID := linkedInUser["id"].(string)
+	firstName := linkedInUser["localizedFirstName"].(string)
+	lastName := linkedInUser["localizedLastName"].(string)
+	email := emailData.Elements[0].HandleTilde.EmailAddress
+
+	// Сохранение или обновление данных пользователя в базе данных
+	var user models.LinkedInUser
+	config.DB.Where("linkedin_id = ?", linkedInID).First(&user)
+
+	if user.LinkedInID == "" {
+		// Пользователь не найден, создаем нового
+		user = models.LinkedInUser{
+			LinkedInID:  linkedInID,
+			FirstName:   firstName,
+			LastName:    lastName,
+			Email:       email,
+			AccessToken: token.AccessToken,
+		}
+		config.DB.Create(&user)
+	} else {
+		// Обновление данных пользователя
+		user.FirstName = firstName
+		user.LastName = lastName
+		user.Email = email
+		user.AccessToken = token.AccessToken
+		config.DB.Save(&user)
 	}
 
-	// Сохранение данных пользователя в базу данных
-	if err := config.DB.Create(&linkedInUser).Error; err != nil {
-		http.Error(w, "Ошибка при сохранении данных пользователя в базу: "+err.Error(), http.StatusInternalServerError)
-		return
-	}
-
-	// Сохранение токена в базу данных
-	oauthToken := models.OAuthToken{
-		UserID:      linkedInUser.ID, // предполагается, что ID пользователя хранится в модели LinkedInUser
-		AccessToken: token.AccessToken,
-		TokenType:   token.TokenType,
-		Expiry:      token.Expiry,
-	}
-
-	if err := config.DB.Create(&oauthToken).Error; err != nil {
-		http.Error(w, "Ошибка при сохранении токена в базу: "+err.Error(), http.StatusInternalServerError)
-		return
-	}
+	// Сохранение информации о пользователе в сессии
+	session, _ := storeLinkedin.Get(r, "session-name")
+	session.Values["user"] = user
+	session.Save(r, w)
 
 	// Отображение данных пользователя
-	fmt.Fprintf(w, "Добро пожаловать, %s %s! Ваш email: %s", linkedInUser.FirstName, linkedInUser.LastName, linkedInUser.Email)
-}
-
-// Получение данных пользователя из токена
-func GetUserFromToken(w http.ResponseWriter, r *http.Request) {
-	// Получение userID из запроса (например, из параметров или сессии)
-	userID := uint(1) // Пример, заменить на реальный userID
-
-	var token models.OAuthToken
-
-	// Поиск токена по userID
-	if err := config.DB.Where("user_id = ?", userID).First(&token).Error; err != nil {
-		http.Error(w, "Не удалось найти токен пользователя: "+err.Error(), http.StatusInternalServerError)
-		return
-	}
-
-	// Восстановление токена в структуру oauth2.Token
-	oauthToken := &oauth2.Token{
-		AccessToken: token.AccessToken,
-		TokenType:   token.TokenType,
-		Expiry:      token.Expiry,
-	}
-
-	// Создание нового клиента с использованием сохраненного токена
-	client := linkedinOAuthConfig.Client(context.Background(), oauthToken)
-
-	// Выполнение запроса к LinkedIn API для получения данных профиля
-	resp, err := client.Get("https://api.linkedin.com/v2/me")
-	if err != nil {
-		http.Error(w, "Не удалось получить данные профиля: "+err.Error(), http.StatusInternalServerError)
-		return
-	}
-	defer resp.Body.Close()
-
-	// Декодирование данных профиля
-	var linkedInUser models.LinkedInUser
-	if err := json.NewDecoder(resp.Body).Decode(&linkedInUser); err != nil {
-		http.Error(w, "Ошибка при декодировании данных профиля: "+err.Error(), http.StatusInternalServerError)
-		return
-	}
-
-	// Запрос email пользователя
-	emailResp, err := client.Get("https://api.linkedin.com/v2/emailAddress?q=members&projection=(elements*(handle~))")
-	if err != nil {
-		http.Error(w, "Не удалось получить email: "+err.Error(), http.StatusInternalServerError)
-		return
-	}
-	defer emailResp.Body.Close()
-
-	// Структура для email ответа
-	type EmailResponse struct {
-		Elements []struct {
-			HandleTilde struct {
-				EmailAddress string `json:"emailAddress"`
-			} `json:"handle~"`
-		} `json:"elements"`
-	}
-
-	var emailData EmailResponse
-	if err := json.NewDecoder(emailResp.Body).Decode(&emailData); err != nil {
-		http.Error(w, "Ошибка при декодировании email: "+err.Error(), http.StatusInternalServerError)
-		return
-	}
-
-	// Сохранение email в структуре пользователя
-	if len(emailData.Elements) > 0 {
-		linkedInUser.Email = emailData.Elements[0].HandleTilde.EmailAddress
-	}
-
-	// Отображение данных пользователя
-	fmt.Fprintf(w, "Добро пожаловать, %s %s! Ваш email: %s", linkedInUser.FirstName, linkedInUser.LastName, linkedInUser.Email)
+	fmt.Fprintf(w, "Добро пожаловать, %s %s! Ваш email: %s", user.FirstName, user.LastName, user.Email)
 }

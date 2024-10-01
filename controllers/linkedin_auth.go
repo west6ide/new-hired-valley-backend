@@ -16,7 +16,7 @@ var linkedinOAuthConfig = &oauth2.Config{
 	ClientID:     os.Getenv("LINKEDIN_CLIENT_ID"),
 	ClientSecret: os.Getenv("LINKEDIN_CLIENT_SECRET"),
 	RedirectURL:  os.Getenv("LINKEDIN_REDIRECT_URL"),
-	Scopes:       []string{"r_liteprofile", "r_emailaddress"},
+	Scopes:       []string{"openid", "profile", "email"},
 	Endpoint:     linkedin.Endpoint,
 }
 

@@ -58,20 +58,29 @@ func generateState() string {
 	return string(b)
 }
 
-// validState validates the state stored client-side with the request's state.
-func validState(r *http.Request) bool {
-	session, _ := storeLinkedin.Get(r, "golinkedinapi")
-	retrievedState := session.Values["state"]
-	return retrievedState == r.URL.Query().Get("state")
-}
-
 // GetLoginURL generates the LinkedIn login URL with state parameter.
 func GetLoginURL(w http.ResponseWriter, r *http.Request) string {
 	state := generateState()
 	session, _ := storeLinkedin.Get(r, "golinkedinapi")
 	session.Values["state"] = state
-	session.Save(r, w)
+	if err := session.Save(r, w); err != nil {
+		fmt.Println("Error saving session:", err)
+	}
 	return authConf.AuthCodeURL(state)
+}
+
+// validState validates the state stored client-side with the request's state.
+func validState(r *http.Request) bool {
+	session, err := storeLinkedin.Get(r, "golinkedinapi")
+	if err != nil {
+		fmt.Println("Error getting session:", err)
+		return false
+	}
+	retrievedState, ok := session.Values["state"].(string)
+	if !ok {
+		return false
+	}
+	return retrievedState == r.URL.Query().Get("state")
 }
 
 // GetProfileData retrieves the user's LinkedIn profile data.

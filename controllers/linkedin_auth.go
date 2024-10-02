@@ -139,7 +139,7 @@ func parseJSON(s string) (*LinkedinProfile, error) {
 func generateState() string {
 	b := make([]byte, 32)
 	rand.Read(b)
-	return string(b)
+	return string(b) // Это нужно преобразовать в строку
 }
 
 // getSessionValue grabs the value of an interface in this case being the session.Values["string"]
@@ -165,7 +165,7 @@ func GetLoginURL(w http.ResponseWriter, r *http.Request) string {
 	state := generateState()
 	session, _ := storeLinkedin.Get(r, "golinkedinapi")
 	session.Values["state"] = state
-	defer session.Save(r, w)
+	defer session.Save(r, w) // Обязательно сохраняйте сессию
 	return authConf.AuthCodeURL(state)
 }
 

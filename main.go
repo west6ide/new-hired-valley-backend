@@ -27,8 +27,9 @@ func main() {
 	// Инициализация конфигурации OAuth для LinkedIn
 	clientID := os.Getenv("LINKEDIN_CLIENT_ID")
 	clientSecret := os.Getenv("LINKEDIN_CLIENT_SECRET")
-	redirectURL := os.Getenv("LINKEDIN_REDIRECT_URL") // URL для редиректа после успешной авторизации
-	permissions := []string{"profile", "email"}       // Необходимые разрешения
+	redirectURL := os.Getenv("LINKEDIN_REDIRECT_URL")                        // URL для редиректа после успешной авторизации
+	permissions := []string{"openid", "profile", "w_member_social", "email"} // Необходимые разрешения
+
 	controllers.InitConfig(permissions, clientID, clientSecret, redirectURL)
 
 	// Настройка маршрутов

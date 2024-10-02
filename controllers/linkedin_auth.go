@@ -21,10 +21,10 @@ const (
 
 var (
 	validPermissions = map[string]bool{
-		"profile":          true,
-		"email":            true,
-		"rw_company_admin": true,
-		"w_share":          true,
+		"openid":          true,
+		"profile":         true,
+		"w_member_social": true,
+		"email":           true,
 	}
 	authConf      *oauth2.Config
 	storeLinkedin = sessions.NewCookieStore([]byte("golinkedinapi"))

@@ -101,7 +101,6 @@ func HandleLinkedInCallback(w http.ResponseWriter, r *http.Request) {
 		FirstName:   linkedInUserProfile.FirstName.Localized["en_US"],
 		LastName:    linkedInUserProfile.LastName.Localized["en_US"],
 		Email:       email,
-		LinkedInID:  linkedInUserProfile.ID,
 		AccessToken: token.AccessToken, // Сохранение AccessToken
 	}
 

@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"golang.org/x/oauth2"
 	"golang.org/x/oauth2/linkedin"
-	"hired-valley-backend/config"
 	"hired-valley-backend/models"
 	"net/http"
 	"os"
@@ -101,15 +100,9 @@ func HandleLinkedInCallback(w http.ResponseWriter, r *http.Request) {
 		FirstName:   linkedInUserProfile.FirstName.Localized["en_US"],
 		LastName:    linkedInUserProfile.LastName.Localized["en_US"],
 		Email:       email,
-		LinkedInID:  linkedInUserProfile.ID,
 		AccessToken: token.AccessToken, // Сохранение AccessToken
 	}
 
-	if err := config.DB.Where("linkedin_id = ?", linkedInUser.LinkedInID).FirstOrCreate(&linkedInUser).Error; err != nil {
-		http.Error(w, "Ошибка при сохранении данных пользователя в базу: "+err.Error(), http.StatusInternalServerError)
-		return
-	}
-
 	// Отображение данных пользователя
-	fmt.Fprintf(w, "Добро пожаловать, %s %s! Ваш email: %s", linkedInUser.FirstName, linkedInUser.LastName, linkedInUser.Email, linkedInUser.LinkedInID)
+	fmt.Fprintf(w, "Добро пожаловать, %s %s! Ваш email: %s", linkedInUser.FirstName, linkedInUser.LastName, linkedInUser.Email)
 }

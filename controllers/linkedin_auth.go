@@ -101,6 +101,7 @@ func HandleLinkedInCallback(w http.ResponseWriter, r *http.Request) {
 		FirstName:   linkedInUserProfile.FirstName.Localized["en_US"],
 		LastName:    linkedInUserProfile.LastName.Localized["en_US"],
 		Email:       email,
+		LinkedInID:  linkedInUserProfile.ID,
 		AccessToken: token.AccessToken, // Сохранение AccessToken
 	}
 
@@ -110,5 +111,5 @@ func HandleLinkedInCallback(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Отображение данных пользователя
-	fmt.Fprintf(w, "Добро пожаловать, %s %s! Ваш email: %s", linkedInUser.FirstName, linkedInUser.LastName, linkedInUser.Email)
+	fmt.Fprintf(w, "Добро пожаловать, %s %s! Ваш email: %s", linkedInUser.FirstName, linkedInUser.LastName, linkedInUser.Email, linkedInUser.LinkedInID)
 }

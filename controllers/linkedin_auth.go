@@ -5,6 +5,8 @@ import (
 	"crypto/rand"
 	"encoding/json"
 	"fmt"
+	"hired-valley-backend/config"
+	"hired-valley-backend/models"
 	"io/ioutil"
 	"net/http"
 	"net/url"
@@ -204,10 +206,10 @@ func InitConfig(permissions []string, clientID string, clientSecret string, redi
 		panic(fmt.Errorf("You must specify some scope to request"))
 	}
 	for _, elem := range permissions {
-		if elem == "r_emailaddress" {
-			isEmail = true
-		} else if elem == "r_basicprofile" {
-			isBasic = true
+		if isEmail && isBasic {
+			requestedURL = fullRequestURL + ",r_emailaddress"
+		} else if isBasic {
+			requestedURL = basicRequestURL
 		}
 		if validPermissions[elem] != true {
 			panic(fmt.Errorf("All elements of permissions must be valid Linkedin permissions as specified in the API docs"))
@@ -239,7 +241,6 @@ func HandleLinkedInLogin(w http.ResponseWriter, r *http.Request) {
 	http.Redirect(w, r, loginURL, http.StatusTemporaryRedirect)
 }
 
-// HandleLinkedInCallback обрабатывает коллбек после авторизации через LinkedIn.
 func HandleLinkedInCallback(w http.ResponseWriter, r *http.Request) {
 	code := r.URL.Query().Get("code")
 	state := r.URL.Query().Get("state")
@@ -261,6 +262,32 @@ func HandleLinkedInCallback(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, fmt.Sprintf("Ошибка при получении данных пользователя через LinkedIn: %v", err), http.StatusInternalServerError)
 		return
 	}
+
+	// Сохранение данных пользователя в базу данных
+	user := models.LinkedInUser{
+		FirstName:  profile.FirstName,
+		LastName:   profile.LastName,
+		Email:      profile.EmailAddress,
+		LinkedInID: profile.ProfileID,
+	}
+
+	// Попробуйте найти существующего пользователя по LinkedIn ID
+	var existingUser models.User
+	if err := config.DB.Where("linked_in_id = ?", profile.ProfileID).First(&existingUser).Error; err == nil {
+		// Пользователь уже существует, обновите его данные
+		config.DB.Model(&existingUser).Updates(user)
+	} else {
+		// Пользователь не найден, создайте нового
+		if err := config.DB.Create(&user).Error; err != nil {
+			http.Error(w, fmt.Sprintf("Ошибка при сохранении данных пользователя: %v", err), http.StatusInternalServerError)
+			return
+		}
+	}
+
+	// Установите сессию
+	session, _ := config.Store.Get(r, "session-name")
+	session.Values["user"] = user
+	session.Save(r, w)
 
 	fmt.Fprintf(w, "Привет, %s! Ваш LinkedIn ID: %s", profile.FirstName, profile.ProfileID)
 }

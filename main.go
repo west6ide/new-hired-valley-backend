@@ -22,12 +22,6 @@ func main() {
 		return
 	}
 
-	clientID := os.Getenv("LINKEDIN_CLIENT_ID")
-	clientSecret := os.Getenv("LINKEDIN_CLIENT_SECRET")
-	redirectURL := os.Getenv("LINKEDIN_REDIRECT_URL")
-
-	controllers.InitConfig(clientID, clientSecret, redirectURL)
-
 	http.HandleFunc("/", handleHome)
 	http.HandleFunc("/login/google", controllers.HandleGoogleLogin)
 	http.HandleFunc("/callback/google", controllers.HandleGoogleCallback)

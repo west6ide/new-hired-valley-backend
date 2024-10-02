@@ -11,28 +11,23 @@ import (
 )
 
 func main() {
-	// Получение порта из переменных окружения
 	port := os.Getenv("PORT")
 	if port == "" {
-		port = "8080" // Значение по умолчанию
+		port = "8080"
 	}
 
-	// Инициализация базы данных
 	config.InitDB()
 	err := config.DB.AutoMigrate(&models.GoogleUser{}, &models.User{}, &models.LinkedInUser{})
 	if err != nil {
 		return
 	}
 
-	// Инициализация конфигурации OAuth для LinkedIn
 	clientID := os.Getenv("LINKEDIN_CLIENT_ID")
 	clientSecret := os.Getenv("LINKEDIN_CLIENT_SECRET")
 	redirectURL := os.Getenv("LINKEDIN_REDIRECT_URL")
-	permissions := []string{"openid", "profile", "w_member_social", "email"}
 
-	controllers.InitConfig(permissions, clientID, clientSecret, redirectURL)
+	controllers.InitConfig(clientID, clientSecret, redirectURL)
 
-	// Настройка маршрутов
 	http.HandleFunc("/", handleHome)
 	http.HandleFunc("/login/google", controllers.HandleGoogleLogin)
 	http.HandleFunc("/callback/google", controllers.HandleGoogleCallback)
@@ -44,19 +39,17 @@ func main() {
 	http.HandleFunc("/api/profile", controllers.GetProfile)
 	http.HandleFunc("/api/logout", controllers.Logout)
 
-	// Запуск сервера
 	c := httpCors.CorsSettings()
 	handler := c.Handler(http.DefaultServeMux)
 	http.ListenAndServe(":"+port, handler)
 }
 
-// Обработчик домашней страницы
 func handleHome(w http.ResponseWriter, r *http.Request) {
 	session, _ := config.Store.Get(r, "session-name")
 	user := session.Values["user"]
 
 	if user != nil {
-		usr := user.(models.GoogleUser)
+		usr := user.(models.LinkedInUser) // Обновлено для LinkedInUser
 		html := fmt.Sprintf(`<html><body>
                    <p>Добро пожаловать, %s!</p>
                    <a href="/logout">Выйти</a><br>

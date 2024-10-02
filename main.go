@@ -22,13 +22,13 @@ func main() {
 	err := config.DB.AutoMigrate(&models.GoogleUser{}, &models.User{}, &models.LinkedInUser{})
 	if err != nil {
 		return
-	} // Добавление миграции для LinkedInUser
+	}
 
 	// Инициализация конфигурации OAuth для LinkedIn
 	clientID := os.Getenv("LINKEDIN_CLIENT_ID")
 	clientSecret := os.Getenv("LINKEDIN_CLIENT_SECRET")
-	redirectURL := os.Getenv("LINKEDIN_REDIRECT_URL")                        // URL для редиректа после успешной авторизации
-	permissions := []string{"openid", "profile", "w_member_social", "email"} // Необходимые разрешения
+	redirectURL := os.Getenv("LINKEDIN_REDIRECT_URL")
+	permissions := []string{"openid", "profile", "w_member_social", "email"}
 
 	controllers.InitConfig(permissions, clientID, clientSecret, redirectURL)
 
@@ -36,8 +36,6 @@ func main() {
 	http.HandleFunc("/", handleHome)
 	http.HandleFunc("/login/google", controllers.HandleGoogleLogin)
 	http.HandleFunc("/callback/google", controllers.HandleGoogleCallback)
-
-	// Маршруты для LinkedIn OAuth
 	http.HandleFunc("/login/linkedin", controllers.HandleLinkedInLogin)
 	http.HandleFunc("/callback/linkedin", controllers.HandleLinkedInCallback)
 

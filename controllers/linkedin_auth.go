@@ -21,8 +21,8 @@ const (
 
 var (
 	validPermissions = map[string]bool{
-		"r_basicprofile":   true,
-		"r_emailaddress":   true,
+		"profile":          true,
+		"email":            true,
 		"rw_company_admin": true,
 		"w_share":          true,
 	}

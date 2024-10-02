@@ -151,17 +151,11 @@ func getSessionValue(f interface{}) string {
 	return ""
 }
 
-// validState validates the state stored client-side with the request's state,
-// it returns false if the states are not equal to each other.
+// validState validates the state stored client-side with the request's state.
 func validState(r *http.Request) bool {
-	// Retrieve state
 	session, _ := storeLinkedin.Get(r, "golinkedinapi")
-	// Compare state to header's state
 	retrievedState := session.Values["state"]
-	if getSessionValue(retrievedState) != r.Header.Get("state") {
-		return false
-	}
-	return true
+	return getSessionValue(retrievedState) == r.URL.Query().Get("state")
 }
 
 // GetLoginURL provides a state-specific login URL for the user to login to.
@@ -250,10 +244,23 @@ func HandleLinkedInLogin(w http.ResponseWriter, r *http.Request) {
 
 // HandleLinkedInCallback обрабатывает коллбек после авторизации через LinkedIn.
 func HandleLinkedInCallback(w http.ResponseWriter, r *http.Request) {
+	// Проверяем наличие параметров 'code' и 'state'
+	code := r.URL.Query().Get("code")
+	state := r.URL.Query().Get("state")
+	if code == "" || state == "" {
+		http.Error(w, "Отсутствует параметр 'code' или 'state'", http.StatusBadRequest)
+		return
+	}
+
+	if !validState(r) {
+		http.Error(w, "Недействительное состояние", http.StatusBadRequest)
+		return
+	}
+
 	// Получаем профиль пользователя через LinkedIn API
 	profile, err := GetProfileData(w, r)
 	if err != nil {
-		http.Error(w, "Ошибка при получении данных пользователя через LinkedIn", http.StatusInternalServerError)
+		http.Error(w, fmt.Sprintf("Ошибка при получении данных пользователя через LinkedIn: %v", err), http.StatusInternalServerError)
 		return
 	}
 

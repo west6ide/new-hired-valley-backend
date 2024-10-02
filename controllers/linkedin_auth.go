@@ -159,11 +159,8 @@ func validState(r *http.Request) bool {
 }
 
 // GetLoginURL provides a state-specific login URL for the user to login to.
-// CAUTION: This must be called before GetProfileData() as this enforces state.
 func GetLoginURL(w http.ResponseWriter, r *http.Request) string {
 	state := generateState()
-	// The only time this will error out is if the session cannot be decoded, however
-	// we don't care about that as we can simply change state.
 	session, _ := storeLinkedin.Get(r, "golinkedinapi")
 	session.Values["state"] = state
 	defer session.Save(r, w)
@@ -244,7 +241,6 @@ func HandleLinkedInLogin(w http.ResponseWriter, r *http.Request) {
 
 // HandleLinkedInCallback обрабатывает коллбек после авторизации через LinkedIn.
 func HandleLinkedInCallback(w http.ResponseWriter, r *http.Request) {
-	// Проверяем наличие параметров 'code' и 'state'
 	code := r.URL.Query().Get("code")
 	state := r.URL.Query().Get("state")
 	if code == "" || state == "" {
@@ -252,18 +248,19 @@ func HandleLinkedInCallback(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	fmt.Println("Получен код:", code)
+	fmt.Println("Состояние из запроса:", state)
+
 	if !validState(r) {
 		http.Error(w, "Недействительное состояние", http.StatusBadRequest)
 		return
 	}
 
-	// Получаем профиль пользователя через LinkedIn API
 	profile, err := GetProfileData(w, r)
 	if err != nil {
 		http.Error(w, fmt.Sprintf("Ошибка при получении данных пользователя через LinkedIn: %v", err), http.StatusInternalServerError)
 		return
 	}
 
-	// Обрабатываем данные профиля пользователя (например, сохраняем в базу данных)
 	fmt.Fprintf(w, "Привет, %s! Ваш LinkedIn ID: %s", profile.FirstName, profile.ProfileID)
 }

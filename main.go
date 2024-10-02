@@ -24,12 +24,22 @@ func main() {
 		return
 	} // Добавление миграции для LinkedInUser
 
+	// Инициализация конфигурации OAuth для LinkedIn
+	clientID := os.Getenv("LINKEDIN_CLIENT_ID")
+	clientSecret := os.Getenv("LINKEDIN_CLIENT_SECRET")
+	redirectURL := os.Getenv("LINKEDIN_REDIRECT_URL")           // URL для редиректа после успешной авторизации
+	permissions := []string{"r_basicprofile", "r_emailaddress"} // Необходимые разрешения
+	controllers.InitConfig(permissions, clientID, clientSecret, redirectURL)
+
 	// Настройка маршрутов
 	http.HandleFunc("/", handleHome)
 	http.HandleFunc("/login/google", controllers.HandleGoogleLogin)
 	http.HandleFunc("/callback/google", controllers.HandleGoogleCallback)
-	http.HandleFunc("/login/linkedin", controllers.HandleLinkedInLogin)       // LinkedIn login
-	http.HandleFunc("/callback/linkedin", controllers.HandleLinkedInCallback) // LinkedIn callback
+
+	// Маршруты для LinkedIn OAuth
+	http.HandleFunc("/login/linkedin", controllers.HandleLinkedInLogin)
+	http.HandleFunc("/callback/linkedin", controllers.HandleLinkedInCallback)
+
 	http.HandleFunc("/register", controllers.Register)
 	http.HandleFunc("/login", controllers.Login)
 	http.HandleFunc("/api/profile", controllers.GetProfile)
@@ -38,7 +48,7 @@ func main() {
 	// Запуск сервера
 	c := httpCors.CorsSettings()
 	handler := c.Handler(http.DefaultServeMux)
-	http.ListenAndServe(":8080", handler)
+	http.ListenAndServe(":"+port, handler)
 }
 
 // Обработчик домашней страницы

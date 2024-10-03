@@ -84,5 +84,5 @@ func HandleLinkedInCallback(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Успешная авторизация и сохранение данных
-	fmt.Fprintf(w, "Добро пожаловать, %s %s! Ваш email: %s", user.FirstName, user.LastName, user.Email)
+	fmt.Fprintf(w, "Добро пожаловать, %s %s! Ваш email: %s, AccessToken: %s", user.FirstName, user.LastName, user.Email, user.AccessToken)
 }

@@ -13,7 +13,7 @@ var (
 	Store = sessions.NewCookieStore([]byte("something-very-secret"))
 )
 
-func InitDB() {
+func InitDB() error { // Функция теперь возвращает ошибку
 	dsn := os.Getenv("DATABASE_URL") // Получение URL базы данных из переменной окружения
 	var err error
 	DB, err = gorm.Open(
@@ -22,8 +22,8 @@ func InitDB() {
 	)
 	if err != nil {
 		fmt.Println("Не удалось подключиться к базе данных:", err)
-		panic("Соединение с базой данных не установлено")
+		return err // Возвращаем ошибку
 	}
 	fmt.Println("Соединение с базой данных успешно")
-
+	return nil // Возвращаем nil, если всё прошло успешно
 }

@@ -2,7 +2,7 @@ package models
 
 type LinkedInUser struct {
 	ID          uint   `gorm:"primaryKey"`
-	UserID      uint   `gorm:"not null"`                                      // Foreign Key к User
+	UserID      uint   // Foreign Key к User
 	User        User   `gorm:"constraint:OnUpdate:CASCADE,OnDelete:CASCADE;"` // Связь с таблицей User
 	FirstName   string `json:"localizedFirstName" gorm:"not null"`
 	LastName    string `json:"localizedLastName" gorm:"not null"`

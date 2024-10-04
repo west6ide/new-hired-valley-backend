@@ -16,7 +16,7 @@ var linkedinOAuthConfig = &oauth2.Config{
 	ClientID:     os.Getenv("LINKEDIN_CLIENT_ID"),
 	ClientSecret: os.Getenv("LINKEDIN_CLIENT_SECRET"),
 	RedirectURL:  os.Getenv("LINKEDIN_REDIRECT_URL"),
-	Scopes:       []string{"openid", "profile", "email", "w_member_social"},
+	Scopes:       []string{"openid", "profile", "email", "w_member_social"}, // Оставляем Scopes как есть
 	Endpoint:     linkedin.Endpoint,
 }
 
@@ -56,7 +56,8 @@ func HandleLinkedInCallback(w http.ResponseWriter, r *http.Request) {
 	// Запрос на получение email-адреса пользователя
 	email, err := getLinkedInEmail(client)
 	if err != nil {
-		http.Error(w, "Не удалось получить email: "+err.Error(), http.StatusInternalServerError)
+		// Если не удалось получить email, предлагаем пользователю ввести его вручную
+		fmt.Fprintf(w, "Мы не смогли получить ваш email. Пожалуйста, введите его вручную для завершения регистрации.")
 		return
 	}
 
@@ -114,11 +115,12 @@ func getLinkedInEmail(client *http.Client) (string, error) {
 		return "", err
 	}
 
-	if len(emailData.Elements) > 0 {
-		return emailData.Elements[0].Handle.EmailAddress, nil
+	// Проверка, есть ли email в ответе
+	if len(emailData.Elements) == 0 || emailData.Elements[0].Handle.EmailAddress == "" {
+		return "", fmt.Errorf("email не найден")
 	}
 
-	return "", fmt.Errorf("email не найден")
+	return emailData.Elements[0].Handle.EmailAddress, nil
 }
 
 // Сохранение или обновление пользователя в базе данных

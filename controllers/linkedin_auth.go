@@ -22,12 +22,11 @@ var linkedinOAuthConfig = &oauth2.Config{
 
 // Обработчик для начала авторизации через LinkedIn
 func HandleLinkedInLogin(w http.ResponseWriter, r *http.Request) {
-	state := "state" // Можно заменить на случайное значение для защиты от CSRF
-	url := linkedinOAuthConfig.AuthCodeURL(state, oauth2.AccessTypeOffline)
+	url := linkedinOAuthConfig.AuthCodeURL("state", oauth2.AccessTypeOffline)
 	http.Redirect(w, r, url, http.StatusTemporaryRedirect)
 }
 
-// Обработчик для получения токена и данных пользователя через LinkedIn API
+// Обработчик для получения токена и данных пользователя через /v2/userinfo
 func HandleLinkedInCallback(w http.ResponseWriter, r *http.Request) {
 	code := r.URL.Query().Get("code")
 	if code == "" {
@@ -42,129 +41,40 @@ func HandleLinkedInCallback(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Создание клиента для запросов с использованием полученного токена
+	// Создание клиента для запросов
 	client := linkedinOAuthConfig.Client(context.Background(), token)
 
-	// Запрос на получение профиля пользователя через /v2/me
-	profile, err := getLinkedInProfile(client)
+	// Запрос к /v2/userinfo для получения данных пользователя
+	userinfoResp, err := client.Get("https://api.linkedin.com/v2/userinfo")
 	if err != nil {
-		http.Error(w, "Не удалось получить профиль: "+err.Error(), http.StatusInternalServerError)
+		http.Error(w, "Не удалось получить данные пользователя: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
+	defer userinfoResp.Body.Close()
+
+	// Декодирование данных пользователя
+	var userInfo map[string]interface{}
+	if err := json.NewDecoder(userinfoResp.Body).Decode(&userInfo); err != nil {
+		http.Error(w, "Ошибка при декодировании данных пользователя: "+err.Error(), http.StatusInternalServerError)
 		return
 	}
 
-	// Запрос на получение email пользователя через /v2/emailAddress
-	email, err := getLinkedInEmail(client)
-	if err != nil {
-		http.Error(w, "Не удалось получить email: "+err.Error(), http.StatusInternalServerError)
-		return
-	}
-
-	// Сохранение данных пользователя в базе данных
-	err = saveLinkedInUserToDB(profile, email, token.AccessToken)
-	if err != nil {
-		http.Error(w, "Ошибка при сохранении пользователя: "+err.Error(), http.StatusInternalServerError)
-		return
-	}
-
-	// Успешная авторизация и отображение приветственного сообщения
-	fmt.Fprintf(w, "Добро пожаловать, %s %s! Ваш email: %s", profile.FirstName, profile.LastName, email)
-}
-
-// Структура для хранения данных профиля LinkedIn
-type LinkedInProfile struct {
-	FirstName string `json:"localizedFirstName"`
-	LastName  string `json:"localizedLastName"`
-	ID        string `json:"id"` // LinkedIn ID (sub)
-}
-
-// Получение данных профиля с LinkedIn API через /v2/me
-func getLinkedInProfile(client *http.Client) (*LinkedInProfile, error) {
-	resp, err := client.Get("https://api.linkedin.com/v2/me")
-	if err != nil {
-		return nil, err
-	}
-	defer resp.Body.Close()
-
-	var profile LinkedInProfile
-	if err := json.NewDecoder(resp.Body).Decode(&profile); err != nil {
-		return nil, err
-	}
-
-	return &profile, nil
-}
-
-// Получение email-адреса пользователя с LinkedIn API через /v2/emailAddress
-func getLinkedInEmail(client *http.Client) (string, error) {
-	resp, err := client.Get("https://api.linkedin.com/v2/emailAddress?q=members&projection=(elements*(handle~))")
-	if err != nil {
-		return "", err
-	}
-	defer resp.Body.Close()
-
-	var emailData struct {
-		Elements []struct {
-			Handle struct {
-				EmailAddress string `json:"emailAddress"`
-			} `json:"handle~"`
-		} `json:"elements"`
-	}
-
-	if err := json.NewDecoder(resp.Body).Decode(&emailData); err != nil {
-		return "", err
-	}
-
-	// Проверка, есть ли email в ответе
-	if len(emailData.Elements) == 0 || emailData.Elements[0].Handle.EmailAddress == "" {
-		return "", fmt.Errorf("email не найден")
-	}
-
-	return emailData.Elements[0].Handle.EmailAddress, nil
-}
-
-// Сохранение или обновление пользователя в базе данных
-func saveLinkedInUserToDB(profile *LinkedInProfile, email string, accessToken string) error {
-	// Проверка на существование пользователя в таблице User по email
-	var user models.User
-	if err := config.DB.Where("email = ?", email).First(&user).Error; err != nil {
-		// Если пользователя нет, создаем новую запись в таблице User
-		user = models.User{
-			Email:       email,
-			Name:        profile.FirstName + " " + profile.LastName,
-			Provider:    "linkedin",
-			AccessToken: accessToken,
+	// Проверка на существование пользователя в базе данных
+	var user models.LinkedInUser
+	if err := config.DB.Where("sub = ?", userInfo["sub"]).First(&user).Error; err != nil {
+		// Если пользователя нет, создаем его
+		user = models.LinkedInUser{
+			Sub:       userInfo["sub"].(string),
+			FirstName: userInfo["given_name"].(string),
+			LastName:  userInfo["family_name"].(string),
+			Email:     userInfo["email"].(string),
 		}
 		if err := config.DB.Create(&user).Error; err != nil {
-			return err
+			http.Error(w, "Ошибка при сохранении пользователя: "+err.Error(), http.StatusInternalServerError)
+			return
 		}
 	}
 
-	// Проверка на существование LinkedInUser
-	var linkedInUser models.LinkedInUser
-	config.DB.Where("sub = ?", profile.ID).First(&linkedInUser)
-
-	if linkedInUser.Sub == "" {
-		// Если LinkedInUser не найден, создаем новую запись и связываем с User
-		linkedInUser = models.LinkedInUser{
-			UserID:      user.ID, // Ссылка на таблицу User
-			Sub:         profile.ID,
-			FirstName:   profile.FirstName,
-			LastName:    profile.LastName,
-			Email:       email,
-			AccessToken: accessToken,
-		}
-		if err := config.DB.Create(&linkedInUser).Error; err != nil {
-			return err
-		}
-	} else {
-		// Обновление данных пользователя LinkedIn
-		linkedInUser.FirstName = profile.FirstName
-		linkedInUser.LastName = profile.LastName
-		linkedInUser.Email = email
-		linkedInUser.AccessToken = accessToken
-		if err := config.DB.Save(&linkedInUser).Error; err != nil {
-			return err
-		}
-	}
-
-	return nil
+	// Успешная авторизация и сохранение данных
+	fmt.Fprintf(w, "Добро пожаловать, %s %s! Ваш email: %s", user.FirstName, user.LastName, user.Email)
 }

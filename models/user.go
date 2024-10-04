@@ -10,6 +10,6 @@ type User struct {
 	Position    string `json:"position"`                            // Должность или позиция пользователя
 	City        string `json:"city"`                                // Город пользователя
 	Income      int    `json:"income"`                              // Уровень дохода пользователя
-	AccessToken string `json:"token" gorm:"not null"`               // Access токен
+	AccessToken string `json:"token"`                               // Access токен
 	Provider    string `json:"provider" gorm:"not null"`            // Обычная авторизация, Google или LinkedIn
 }

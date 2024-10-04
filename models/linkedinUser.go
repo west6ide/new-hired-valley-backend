@@ -8,5 +8,5 @@ type LinkedInUser struct {
 	LastName    string `json:"localizedLastName" gorm:"not null"`
 	Email       string `json:"email" gorm:"not null;unique"` // Email уникальный
 	Sub         string `gorm:"unique"`                       // LinkedIn OpenID идентификатор
-	AccessToken string `json:"access_token" gorm:"not null"` // Поле для хранения токена
+	AccessToken string `json:"access_token"`                 // Поле для хранения токена
 }

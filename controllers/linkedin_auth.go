@@ -60,29 +60,45 @@ func HandleLinkedInCallback(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Проверка на существование пользователя в базе данных
-	var user models.LinkedInUser
-	if err := config.DB.Where("sub = ?", userInfo["sub"]).First(&user).Error; err != nil {
+	var user models.User
+	if err := config.DB.Where("email = ?", userInfo["email"]).First(&user).Error; err != nil {
 		// Если пользователя нет, создаем его
-		user = models.LinkedInUser{
-			Sub:         userInfo["sub"].(string),
-			FirstName:   userInfo["given_name"].(string),
-			LastName:    userInfo["family_name"].(string),
+		user = models.User{
 			Email:       userInfo["email"].(string),
-			AccessToken: token.AccessToken, // Сохраняем AccessToken при создании нового пользователя
+			Name:        userInfo["localizedFirstName"].(string) + " " + userInfo["localizedLastName"].(string),
+			Provider:    "linkedin",
+			AccessToken: token.AccessToken,
 		}
 		if err := config.DB.Create(&user).Error; err != nil {
 			http.Error(w, "Ошибка при сохранении пользователя: "+err.Error(), http.StatusInternalServerError)
 			return
 		}
-	} else {
-		// Если пользователь уже существует, обновляем его AccessToken
-		user.AccessToken = token.AccessToken
-		if err := config.DB.Save(&user).Error; err != nil {
-			http.Error(w, "Ошибка при обновлении пользователя: "+err.Error(), http.StatusInternalServerError)
-			return
+	}
+
+	// Проверка в таблице LinkedInUser
+	var linkedInUser models.LinkedInUser
+	config.DB.Where("sub = ?", userInfo["sub"]).First(&linkedInUser)
+
+	if linkedInUser.Sub == "" {
+		// Если LinkedInUser не найден, создаем нового
+		linkedInUser = models.LinkedInUser{
+			UserID:      user.ID, // Связь с таблицей User
+			Sub:         userInfo["sub"].(string),
+			FirstName:   userInfo["localizedFirstName"].(string),
+			LastName:    userInfo["localizedLastName"].(string),
+			Email:       userInfo["email"].(string),
+			AccessToken: token.AccessToken,
 		}
+		config.DB.Create(&linkedInUser)
+	} else {
+		// Если LinkedInUser найден, обновляем его информацию
+		linkedInUser.FirstName = userInfo["localizedFirstName"].(string)
+		linkedInUser.LastName = userInfo["localizedLastName"].(string)
+		linkedInUser.Email = userInfo["email"].(string)
+		linkedInUser.AccessToken = token.AccessToken
+		config.DB.Save(&linkedInUser)
 	}
 
 	// Успешная авторизация и сохранение данных
-	fmt.Fprintf(w, "Добро пожаловать, %s %s! Ваш email: %s, AccessToken: %s", user.FirstName, user.LastName, user.Email, user.AccessToken)
+	fmt.Fprintf(w, "Добро пожаловать, %s! Ваш email: %s, AccessToken: %s", user.Name, user.Email, user.AccessToken)
 }

@@ -7,6 +7,8 @@ import (
 
 type GoogleUser struct {
 	ID          uint   `gorm:"primaryKey"`
+	UserID      uint   `gorm:"not null"`                                      // Foreign Key к User
+	User        User   `gorm:"constraint:OnUpdate:CASCADE,OnDelete:CASCADE;"` // Связь с таблицей User
 	GoogleID    string `gorm:"unique_index;not null"`
 	Email       string `gorm:"not null"`
 	FirstName   string

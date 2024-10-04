@@ -76,30 +76,46 @@ func HandleGoogleCallback(w http.ResponseWriter, r *http.Request) {
 	firstName := userInfo["given_name"].(string)
 	lastName := userInfo["family_name"].(string)
 
-	// Save or update user info in database
-	var user models.GoogleUser
-	config.DB.Where("google_id = ?", googleID).First(&user)
+	// Проверка, существует ли пользователь с таким email в таблице User
+	var user models.User
+	config.DB.Where("email = ?", email).First(&user)
 
-	if user.GoogleID == "" {
-		// User not found, create new
-		user = models.GoogleUser{
+	if user.ID == 0 {
+		// Если пользователь не найден, создаем нового пользователя
+		user = models.User{
+			Email:       email,
+			Name:        firstName + " " + lastName,
+			Provider:    "google",
+			AccessToken: token.AccessToken,
+		}
+		config.DB.Create(&user)
+	}
+
+	// Проверка в таблице GoogleUser
+	var googleUser models.GoogleUser
+	config.DB.Where("google_id = ?", googleID).First(&googleUser)
+
+	if googleUser.GoogleID == "" {
+		// Если GoogleUser не найден, создаем нового
+		googleUser = models.GoogleUser{
+			UserID:      user.ID, // Связь с таблицей User
 			GoogleID:    googleID,
 			Email:       email,
 			FirstName:   firstName,
 			LastName:    lastName,
 			AccessToken: token.AccessToken,
 		}
-		config.DB.Create(&user)
+		config.DB.Create(&googleUser)
 	} else {
-		// User found, update info
-		user.Email = email
-		user.FirstName = firstName
-		user.LastName = lastName
-		user.AccessToken = token.AccessToken
-		config.DB.Save(&user)
+		// Если GoogleUser найден, обновляем его информацию
+		googleUser.Email = email
+		googleUser.FirstName = firstName
+		googleUser.LastName = lastName
+		googleUser.AccessToken = token.AccessToken
+		config.DB.Save(&googleUser)
 	}
 
-	// Save user info in session
+	// Сохраняем данные пользователя в сессии
 	session, _ := store.Get(r, "session-name")
 	session.Values["user"] = user
 	session.Save(r, w)

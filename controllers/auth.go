@@ -27,9 +27,9 @@ func Register(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Проверяем, существует ли пользователь с таким email
+	// Проверяем, существует ли пользователь с таким email и обычной авторизацией (provider = local)
 	var existingUser models.User
-	if err := config.DB.Where("email = ?", user.Email).First(&existingUser).Error; err == nil {
+	if err := config.DB.Where("email = ? AND provider = ?", user.Email, "local").First(&existingUser).Error; err == nil {
 		http.Error(w, "Email already registered", http.StatusConflict)
 		return
 	}
@@ -41,6 +41,7 @@ func Register(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	user.Password = string(hashedPassword)
+	user.Provider = "local" // Устанавливаем провайдер как "local" для обычной регистрации
 
 	// Создание JWT токена
 	expirationTime := time.Now().Add(24 * time.Hour)
@@ -59,14 +60,14 @@ func Register(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Сохраняем пользователя и токен в базе данных
-	user.Token = tokenString
+	user.AccessToken = tokenString
 	if err := config.DB.Create(&user).Error; err != nil {
 		http.Error(w, "Error creating user", http.StatusInternalServerError)
 		return
 	}
 
 	// Убираем токен из структуры пользователя перед отправкой
-	user.Token = ""
+	user.AccessToken = ""
 
 	// Возвращаем пользователя и токен отдельно
 	w.Header().Set("Content-Type", "application/json")
@@ -77,7 +78,6 @@ func Register(w http.ResponseWriter, r *http.Request) {
 }
 
 // Login: Вход с паролем и генерация JWT
-// Login: Вход с паролем и генерация JWT
 func Login(w http.ResponseWriter, r *http.Request) {
 	var inputUser models.User
 	if err := json.NewDecoder(r.Body).Decode(&inputUser); err != nil {
@@ -86,8 +86,8 @@ func Login(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var user models.User
-	// Поиск пользователя по email
-	if err := config.DB.Where("email = ?", inputUser.Email).First(&user).Error; err != nil {
+	// Поиск пользователя по email и провайдеру "local"
+	if err := config.DB.Where("email = ? AND provider = ?", inputUser.Email, "local").First(&user).Error; err != nil {
 		http.Error(w, "User not found", http.StatusUnauthorized)
 		return
 	}
@@ -115,7 +115,7 @@ func Login(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Обновляем токен в базе данных
-	user.Token = tokenString
+	user.AccessToken = tokenString
 	if err := config.DB.Save(&user).Error; err != nil {
 		http.Error(w, "Error updating user token", http.StatusInternalServerError)
 		return
@@ -147,9 +147,9 @@ func GetProfile(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Поиск пользователя по email из токена
+	// Поиск пользователя по email из токена и провайдеру "local"
 	var user models.User
-	if err := config.DB.Where("email = ?", claims.Email).First(&user).Error; err != nil {
+	if err := config.DB.Where("email = ? AND provider = ?", claims.Email, "local").First(&user).Error; err != nil {
 		http.Error(w, "User not found", http.StatusUnauthorized)
 		return
 	}

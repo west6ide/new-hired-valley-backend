@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"hired-valley-backend/config"
 	"hired-valley-backend/controllers"
-	"hired-valley-backend/controllers/httpCors"
 	"hired-valley-backend/models"
 	"net/http"
 	"os"
@@ -32,10 +31,6 @@ func main() {
 	http.HandleFunc("/login", controllers.Login)
 	http.HandleFunc("/api/profile", controllers.GetProfile)
 	http.HandleFunc("/api/logout", controllers.Logout)
-
-	c := httpCors.CorsSettings()
-	handler := c.Handler(http.DefaultServeMux)
-	http.ListenAndServe(":"+port, handler)
 }
 
 func handleHome(w http.ResponseWriter, r *http.Request) {

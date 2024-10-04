@@ -16,7 +16,7 @@ var linkedinOAuthConfig = &oauth2.Config{
 	ClientID:     os.Getenv("LINKEDIN_CLIENT_ID"),
 	ClientSecret: os.Getenv("LINKEDIN_CLIENT_SECRET"),
 	RedirectURL:  os.Getenv("LINKEDIN_REDIRECT_URL"),
-	Scopes:       []string{"openid", "profile", "email", "w_member_social"}, // Оставляем Scopes как есть
+	Scopes:       []string{"openid", "profile", "email", "w_member_social"}, // Сохраняем ваши Scopes
 	Endpoint:     linkedin.Endpoint,
 }
 
@@ -56,8 +56,8 @@ func HandleLinkedInCallback(w http.ResponseWriter, r *http.Request) {
 	// Запрос на получение email-адреса пользователя
 	email, err := getLinkedInEmail(client)
 	if err != nil {
-		// Если не удалось получить email, предлагаем пользователю ввести его вручную
-		fmt.Fprintf(w, "Мы не смогли получить ваш email. Пожалуйста, введите его вручную для завершения регистрации.")
+		// Если не удалось получить email, отправляем форму для ввода email вручную
+		showEmailForm(w, profile, token.AccessToken)
 		return
 	}
 
@@ -70,6 +70,59 @@ func HandleLinkedInCallback(w http.ResponseWriter, r *http.Request) {
 
 	// Успешная авторизация и отображение приветственного сообщения
 	fmt.Fprintf(w, "Добро пожаловать, %s %s! Ваш email: %s", profile.FirstName, profile.LastName, email)
+}
+
+// Функция для отображения формы, если email не был получен
+func showEmailForm(w http.ResponseWriter, profile *LinkedInProfile, accessToken string) {
+	html := fmt.Sprintf(`
+		<html>
+		<body>
+			<p>Мы не смогли получить ваш email. Пожалуйста, введите его вручную для завершения регистрации.</p>
+			<form action="/submit-email" method="post">
+				<input type="hidden" name="first_name" value="%s">
+				<input type="hidden" name="last_name" value="%s">
+				<input type="hidden" name="sub" value="%s">
+				<input type="hidden" name="access_token" value="%s">
+				<label for="email">Email:</label>
+				<input type="email" id="email" name="email" required>
+				<button type="submit">Завершить регистрацию</button>
+			</form>
+		</body>
+		</html>`, profile.FirstName, profile.LastName, profile.ID, accessToken)
+	fmt.Fprint(w, html)
+}
+
+// Обработчик для получения введенного пользователем email
+func HandleSubmitEmail(w http.ResponseWriter, r *http.Request) {
+	// Получение данных из формы
+	firstName := r.FormValue("first_name")
+	lastName := r.FormValue("last_name")
+	sub := r.FormValue("sub")
+	email := r.FormValue("email")
+	accessToken := r.FormValue("access_token")
+
+	// Проверка наличия всех обязательных данных
+	if firstName == "" || lastName == "" || sub == "" || email == "" || accessToken == "" {
+		http.Error(w, "Все поля обязательны для заполнения", http.StatusBadRequest)
+		return
+	}
+
+	// Создаем профиль LinkedIn с данными из формы
+	profile := &LinkedInProfile{
+		FirstName: firstName,
+		LastName:  lastName,
+		ID:        sub,
+	}
+
+	// Сохраняем данные в базу
+	err := saveLinkedInUserToDB(profile, email, accessToken)
+	if err != nil {
+		http.Error(w, "Ошибка при сохранении данных в базу: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	// Успешная регистрация
+	fmt.Fprintf(w, "Регистрация завершена. Добро пожаловать, %s %s! Ваш email: %s", firstName, lastName, email)
 }
 
 // Структура для хранения данных профиля LinkedIn

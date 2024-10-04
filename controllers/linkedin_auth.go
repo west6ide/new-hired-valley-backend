@@ -16,7 +16,7 @@ var linkedinOAuthConfig = &oauth2.Config{
 	ClientID:     os.Getenv("LINKEDIN_CLIENT_ID"),
 	ClientSecret: os.Getenv("LINKEDIN_CLIENT_SECRET"),
 	RedirectURL:  os.Getenv("LINKEDIN_REDIRECT_URL"),
-	Scopes:       []string{"openid", "profile", "email", "w_member_social"}, // Сохраняем Scopes
+	Scopes:       []string{"openid", "profile", "email", "w_member_social"},
 	Endpoint:     linkedin.Endpoint,
 }
 
@@ -35,31 +35,31 @@ func HandleLinkedInCallback(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Получение токена по коду авторизации
+	// Получение токена
 	token, err := linkedinOAuthConfig.Exchange(context.Background(), code)
 	if err != nil {
 		http.Error(w, "Не удалось получить токен: "+err.Error(), http.StatusInternalServerError)
 		return
 	}
 
-	// Создание HTTP-клиента для запросов с использованием полученного токена
+	// Создание клиента для запросов с использованием полученного токена
 	client := linkedinOAuthConfig.Client(context.Background(), token)
 
-	// Запрос на получение профиля пользователя (включает OpenID и профиль)
+	// Запрос на получение профиля пользователя через /v2/me
 	profile, err := getLinkedInProfile(client)
 	if err != nil {
 		http.Error(w, "Не удалось получить профиль: "+err.Error(), http.StatusInternalServerError)
 		return
 	}
 
-	// Запрос на получение email-адреса пользователя (с использованием Scopes)
+	// Запрос на получение email пользователя через /v2/emailAddress
 	email, err := getLinkedInEmail(client)
 	if err != nil {
 		http.Error(w, "Не удалось получить email: "+err.Error(), http.StatusInternalServerError)
 		return
 	}
 
-	// Сохранение данных пользователя в базу данных
+	// Сохранение данных пользователя в базе данных
 	err = saveLinkedInUserToDB(profile, email, token.AccessToken)
 	if err != nil {
 		http.Error(w, "Ошибка при сохранении пользователя: "+err.Error(), http.StatusInternalServerError)
@@ -77,7 +77,7 @@ type LinkedInProfile struct {
 	ID        string `json:"id"` // LinkedIn ID (sub)
 }
 
-// Получение данных профиля с LinkedIn API
+// Получение данных профиля с LinkedIn API через /v2/me
 func getLinkedInProfile(client *http.Client) (*LinkedInProfile, error) {
 	resp, err := client.Get("https://api.linkedin.com/v2/me")
 	if err != nil {
@@ -93,7 +93,7 @@ func getLinkedInProfile(client *http.Client) (*LinkedInProfile, error) {
 	return &profile, nil
 }
 
-// Получение email-адреса пользователя с LinkedIn API (Scope "email")
+// Получение email-адреса пользователя с LinkedIn API через /v2/emailAddress
 func getLinkedInEmail(client *http.Client) (string, error) {
 	resp, err := client.Get("https://api.linkedin.com/v2/emailAddress?q=members&projection=(elements*(handle~))")
 	if err != nil {

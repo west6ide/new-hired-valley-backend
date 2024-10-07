@@ -59,22 +59,50 @@ func HandleLinkedInCallback(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Проверка на существование пользователя в базе данных
-	var user models.LinkedInUser
-	if err := config.DB.Where("sub = ?", userInfo["sub"]).First(&user).Error; err != nil {
-		// Если пользователя нет, создаем его
-		user = models.LinkedInUser{
-			Sub:       userInfo["sub"].(string),
-			FirstName: userInfo["given_name"].(string),
-			LastName:  userInfo["family_name"].(string),
-			Email:     userInfo["email"].(string),
+	// Проверка на существование пользователя в основной таблице User
+	user, err := createOrGetUser(userInfo["email"].(string), userInfo["given_name"].(string), userInfo["family_name"].(string), token.AccessToken)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	// Проверка на существование пользователя в базе данных LinkedInUser
+	var linkedInUser models.LinkedInUser
+	if err := config.DB.Where("sub = ?", userInfo["sub"]).First(&linkedInUser).Error; err != nil {
+		// Если пользователя нет, создаем запись в таблице LinkedInUser
+		linkedInUser = models.LinkedInUser{
+			UserID:      user.ID, // Связь с таблицей User
+			Sub:         userInfo["sub"].(string),
+			FirstName:   userInfo["given_name"].(string),
+			LastName:    userInfo["family_name"].(string),
+			Email:       userInfo["email"].(string),
+			AccessToken: token.AccessToken,
 		}
-		if err := config.DB.Create(&user).Error; err != nil {
+		if err := config.DB.Create(&linkedInUser).Error; err != nil {
 			http.Error(w, "Ошибка при сохранении пользователя: "+err.Error(), http.StatusInternalServerError)
 			return
 		}
 	}
 
 	// Успешная авторизация и сохранение данных
-	fmt.Fprintf(w, "Добро пожаловать, %s %s! Ваш email: %s", user.FirstName, user.LastName, user.Email)
+	fmt.Fprintf(w, "Добро пожаловать, %s %s! Ваш email: %s", linkedInUser.FirstName, linkedInUser.LastName, linkedInUser.Email)
+}
+
+// Функция для создания или получения пользователя в основной таблице User
+func createOrGetUser(email, firstName, lastName, accessToken string) (*models.User, error) {
+	// Проверка, существует ли пользователь в таблице User
+	var user models.User
+	if err := config.DB.Where("email = ?", email).First(&user).Error; err != nil {
+		// Если пользователя нет, создаем нового
+		user = models.User{
+			Email:       email,
+			Name:        firstName + " " + lastName,
+			Provider:    "linkedin",  // Указываем, что провайдер LinkedIn
+			AccessToken: accessToken, // Сохраняем токен доступа
+		}
+		if err := config.DB.Create(&user).Error; err != nil {
+			return nil, fmt.Errorf("ошибка при создании пользователя в таблице User: %v", err)
+		}
+	}
+	return &user, nil
 }

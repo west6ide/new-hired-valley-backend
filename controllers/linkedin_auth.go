@@ -95,7 +95,6 @@ func createOrGetUser(email, firstName, lastName, accessToken string) (*models.Us
 	if err := config.DB.Where("email = ?", email).First(&user).Error; err != nil {
 		// Если пользователя нет, создаем нового
 		user = models.User{
-			ID:          user.ID,
 			Email:       email,
 			Name:        firstName + " " + lastName,
 			Provider:    "linkedin",  // Указываем, что провайдер LinkedIn

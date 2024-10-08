@@ -77,7 +77,9 @@ func HandleLinkedInCallback(w http.ResponseWriter, r *http.Request) {
 			LastName:    userInfo["family_name"].(string),
 			Email:       userInfo["email"].(string),
 			AccessToken: token.AccessToken,
+			LinkedInID:  userInfo["id"].(string), // Предполагается, что "id" – это идентификатор из LinkedIn
 		}
+
 		if err := config.DB.Create(&linkedInUser).Error; err != nil {
 			http.Error(w, "Ошибка при сохранении пользователя: "+err.Error(), http.StatusInternalServerError)
 			return

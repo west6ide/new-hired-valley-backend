@@ -16,7 +16,7 @@ var linkedinOAuthConfig = &oauth2.Config{
 	ClientID:     os.Getenv("LINKEDIN_CLIENT_ID"),
 	ClientSecret: os.Getenv("LINKEDIN_CLIENT_SECRET"),
 	RedirectURL:  os.Getenv("LINKEDIN_REDIRECT_URL"),
-	Scopes:       []string{"openid", "profile", "email", "w_member_social"},
+	Scopes:       []string{"openid", "profile", "email", "w_member_social"}, // Ваши scopes
 	Endpoint:     linkedin.Endpoint,
 }
 
@@ -26,7 +26,7 @@ func HandleLinkedInLogin(w http.ResponseWriter, r *http.Request) {
 	http.Redirect(w, r, url, http.StatusTemporaryRedirect)
 }
 
-// Обработчик для получения токена и данных пользователя через /v2/userinfo
+// Обработчик для получения токена и данных пользователя через /v2/me и /v2/emailAddress
 func HandleLinkedInCallback(w http.ResponseWriter, r *http.Request) {
 	code := r.URL.Query().Get("code")
 	if code == "" {
@@ -44,23 +44,46 @@ func HandleLinkedInCallback(w http.ResponseWriter, r *http.Request) {
 	// Создание клиента для запросов
 	client := linkedinOAuthConfig.Client(context.Background(), token)
 
-	// Запрос к /v2/userinfo для получения данных пользователя
-	userinfoResp, err := client.Get("https://api.linkedin.com/v2/userinfo")
+	// Запрос к /v2/me для получения данных профиля пользователя (id, имя, фамилия)
+	profileResp, err := client.Get("https://api.linkedin.com/v2/me")
 	if err != nil {
-		http.Error(w, "Не удалось получить данные пользователя: "+err.Error(), http.StatusInternalServerError)
+		http.Error(w, "Не удалось получить данные профиля: "+err.Error(), http.StatusInternalServerError)
 		return
 	}
-	defer userinfoResp.Body.Close()
+	defer profileResp.Body.Close()
 
-	// Декодирование данных пользователя
-	var userInfo map[string]interface{}
-	if err := json.NewDecoder(userinfoResp.Body).Decode(&userInfo); err != nil {
-		http.Error(w, "Ошибка при декодировании данных пользователя: "+err.Error(), http.StatusInternalServerError)
+	// Декодирование данных профиля
+	var profileData map[string]interface{}
+	if err := json.NewDecoder(profileResp.Body).Decode(&profileData); err != nil {
+		http.Error(w, "Ошибка при декодировании профиля: "+err.Error(), http.StatusInternalServerError)
 		return
 	}
+
+	// Получение LinkedIn ID, имени и фамилии
+	linkedinID := profileData["id"].(string)
+	firstName := profileData["localizedFirstName"].(string)
+	lastName := profileData["localizedLastName"].(string)
+
+	// Запрос к API LinkedIn для получения email пользователя
+	emailResp, err := client.Get("https://api.linkedin.com/v2/emailAddress?q=members&projection=(elements*(handle~))")
+	if err != nil {
+		http.Error(w, "Не удалось получить email пользователя: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
+	defer emailResp.Body.Close()
+
+	// Декодирование email
+	var emailData map[string]interface{}
+	if err := json.NewDecoder(emailResp.Body).Decode(&emailData); err != nil {
+		http.Error(w, "Ошибка при декодировании email: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	// Получение email пользователя
+	email := emailData["elements"].([]interface{})[0].(map[string]interface{})["handle~"].(map[string]interface{})["emailAddress"].(string)
 
 	// Проверка на существование пользователя в основной таблице User
-	user, err := createOrGetUser(userInfo["email"].(string), userInfo["given_name"].(string), userInfo["family_name"].(string), token.AccessToken)
+	user, err := createOrGetUser(email, firstName, lastName, token.AccessToken)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -68,16 +91,15 @@ func HandleLinkedInCallback(w http.ResponseWriter, r *http.Request) {
 
 	// Проверка на существование пользователя в базе данных LinkedInUser
 	var linkedInUser models.LinkedInUser
-	if err := config.DB.Where("sub = ?", userInfo["sub"]).First(&linkedInUser).Error; err != nil {
+	if err := config.DB.Where("sub = ?", linkedinID).First(&linkedInUser).Error; err != nil {
 		// Если пользователя нет, создаем запись в таблице LinkedInUser
 		linkedInUser = models.LinkedInUser{
-			UserID:      user.ID, // Связь с таблицей User
-			Sub:         userInfo["sub"].(string),
-			FirstName:   userInfo["given_name"].(string),
-			LastName:    userInfo["family_name"].(string),
-			Email:       userInfo["email"].(string),
+			UserID:      user.ID,    // Связь с таблицей User
+			Sub:         linkedinID, // Записываем LinkedIn ID пользователя
+			FirstName:   firstName,
+			LastName:    lastName,
+			Email:       email,
 			AccessToken: token.AccessToken,
-			LinkedInID:  userInfo["id"].(string), // Предполагается, что "id" – это идентификатор из LinkedIn
 		}
 
 		if err := config.DB.Create(&linkedInUser).Error; err != nil {

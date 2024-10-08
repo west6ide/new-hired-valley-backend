@@ -2,6 +2,7 @@ package controllers
 
 import (
 	"encoding/json"
+	"fmt"
 	"github.com/dgrijalva/jwt-go"
 	"golang.org/x/crypto/bcrypt"
 	"hired-valley-backend/config"
@@ -40,6 +41,9 @@ func ChangePassword(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Отладочный вывод для проверки правильности хэша
+	fmt.Println("Hashed password from DB:", user.Password)
+
 	// Шаг 2: Получение старого и нового пароля из запроса
 	var passwordChangeRequest struct {
 		CurrentPassword string `json:"current_password"`
@@ -50,8 +54,13 @@ func ChangePassword(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Отладочный вывод для проверки введенного пароля
+	fmt.Println("Provided current password:", passwordChangeRequest.CurrentPassword)
+
 	// Шаг 3: Проверка текущего пароля
-	if err := bcrypt.CompareHashAndPassword([]byte(user.Password), []byte(passwordChangeRequest.CurrentPassword)); err != nil {
+	err = bcrypt.CompareHashAndPassword([]byte(user.Password), []byte(passwordChangeRequest.CurrentPassword))
+	if err != nil {
+		fmt.Println("Error comparing passwords:", err)
 		http.Error(w, "Current password is incorrect", http.StatusUnauthorized)
 		return
 	}

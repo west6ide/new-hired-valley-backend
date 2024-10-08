@@ -39,6 +39,7 @@ func main() {
 	http.HandleFunc("/login", controllers.Login)
 	http.HandleFunc("/api/profile", controllers.GetProfile)
 	http.HandleFunc("/api/logout", controllers.Logout)
+	http.HandleFunc("/change-password", controllers.ChangePassword)
 
 	// Запускаем сервер
 	log.Printf("Сервер запущен на порту %s", port)

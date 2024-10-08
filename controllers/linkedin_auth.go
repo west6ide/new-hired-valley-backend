@@ -63,22 +63,22 @@ func HandleLinkedInCallback(w http.ResponseWriter, r *http.Request) {
 	if err := config.DB.Where("email = ?", userInfo["email"].(string)).First(&user).Error; err != nil {
 		// Если пользователя нет, создаем его
 		user = models.User{
-			Email:    userInfo["email"].(string),
-			Name:     userInfo["given_name"].(string),
-			Provider: "LinkedIn", // Устанавливаем провайдер как LinkedIn
+			Email:       userInfo["email"].(string),
+			Name:        userInfo["given_name"].(string),
+			Provider:    "LinkedIn",        // Устанавливаем провайдер как LinkedIn
+			AccessToken: token.AccessToken, // Сохраняем AccessToken
 		}
 		if err := config.DB.Create(&user).Error; err != nil {
 			http.Error(w, "Ошибка при сохранении пользователя в таблице User: "+err.Error(), http.StatusInternalServerError)
 			return
 		}
 	} else {
-		// Если пользователь существует, обновляем его провайдер, если необходимо
-		if user.Provider != "LinkedIn" {
-			user.Provider = "LinkedIn"
-			if err := config.DB.Save(&user).Error; err != nil {
-				http.Error(w, "Ошибка при обновлении провайдера пользователя: "+err.Error(), http.StatusInternalServerError)
-				return
-			}
+		// Если пользователь существует, обновляем его провайдер и AccessToken
+		user.Provider = "LinkedIn"
+		user.AccessToken = token.AccessToken
+		if err := config.DB.Save(&user).Error; err != nil {
+			http.Error(w, "Ошибка при обновлении пользователя: "+err.Error(), http.StatusInternalServerError)
+			return
 		}
 	}
 
@@ -92,7 +92,7 @@ func HandleLinkedInCallback(w http.ResponseWriter, r *http.Request) {
 			FirstName:   userInfo["given_name"].(string),
 			LastName:    userInfo["family_name"].(string),
 			Email:       userInfo["email"].(string),
-			AccessToken: token.AccessToken,
+			AccessToken: token.AccessToken, // Сохраняем AccessToken для LinkedInUser
 		}
 		if err := config.DB.Create(&linkedInUser).Error; err != nil {
 			http.Error(w, "Ошибка при сохранении пользователя LinkedIn: "+err.Error(), http.StatusInternalServerError)
@@ -101,5 +101,5 @@ func HandleLinkedInCallback(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Успешная авторизация и сохранение данных
-	fmt.Fprintf(w, "Добро пожаловать, %s! Ваш email: %s", user.Name, user.Email)
+	fmt.Fprintf(w, "Добро пожаловать, %s ! Ваш email: %s", user.Name, user.Email)
 }

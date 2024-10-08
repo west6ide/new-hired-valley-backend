@@ -26,7 +26,6 @@ func HandleLinkedInLogin(w http.ResponseWriter, r *http.Request) {
 	http.Redirect(w, r, url, http.StatusTemporaryRedirect)
 }
 
-// Обработчик для получения токена и данных пользователя через /v2/userinfo
 func HandleLinkedInCallback(w http.ResponseWriter, r *http.Request) {
 	code := r.URL.Query().Get("code")
 	if code == "" {
@@ -59,22 +58,38 @@ func HandleLinkedInCallback(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Проверка на существование пользователя в базе данных
-	var user models.LinkedInUser
-	if err := config.DB.Where("sub = ?", userInfo["sub"]).First(&user).Error; err != nil {
+	// Проверка на существование пользователя в базе данных users
+	var user models.User
+	if err := config.DB.Where("email = ?", userInfo["email"].(string)).First(&user).Error; err != nil {
 		// Если пользователя нет, создаем его
-		user = models.LinkedInUser{
-			Sub:       userInfo["sub"].(string),
-			FirstName: userInfo["given_name"].(string),
-			LastName:  userInfo["family_name"].(string),
-			Email:     userInfo["email"].(string),
+		user = models.User{
+			Email: userInfo["email"].(string),
+			Name:  userInfo["name"].(string),
 		}
 		if err := config.DB.Create(&user).Error; err != nil {
-			http.Error(w, "Ошибка при сохранении пользователя: "+err.Error(), http.StatusInternalServerError)
+			http.Error(w, "Ошибка при сохранении пользователя в таблице User: "+err.Error(), http.StatusInternalServerError)
+			return
+		}
+	}
+
+	// Проверка на существование пользователя в базе данных LinkedInUser
+	var linkedInUser models.LinkedInUser
+	if err := config.DB.Where("sub = ?", userInfo["sub"]).First(&linkedInUser).Error; err != nil {
+		// Если пользователя LinkedIn нет, создаем его
+		linkedInUser = models.LinkedInUser{
+			UserID:      user.ID, // Ссылка на существующего пользователя
+			Sub:         userInfo["sub"].(string),
+			FirstName:   userInfo["given_name"].(string),
+			LastName:    userInfo["family_name"].(string),
+			Email:       userInfo["email"].(string),
+			AccessToken: token.AccessToken,
+		}
+		if err := config.DB.Create(&linkedInUser).Error; err != nil {
+			http.Error(w, "Ошибка при сохранении пользователя LinkedIn: "+err.Error(), http.StatusInternalServerError)
 			return
 		}
 	}
 
 	// Успешная авторизация и сохранение данных
-	fmt.Fprintf(w, "Добро пожаловать, %s %s! Ваш email: %s", user.FirstName, user.LastName, user.Email)
+	fmt.Fprintf(w, "Добро пожаловать, %s! Ваш email: %s", user.Name, user.Email)
 }

@@ -63,12 +63,22 @@ func HandleLinkedInCallback(w http.ResponseWriter, r *http.Request) {
 	if err := config.DB.Where("email = ?", userInfo["email"].(string)).First(&user).Error; err != nil {
 		// Если пользователя нет, создаем его
 		user = models.User{
-			Email: userInfo["email"].(string),
-			Name:  userInfo["name"].(string),
+			Email:    userInfo["email"].(string),
+			Name:     userInfo["given_name"].(string),
+			Provider: "LinkedIn", // Устанавливаем провайдер как LinkedIn
 		}
 		if err := config.DB.Create(&user).Error; err != nil {
 			http.Error(w, "Ошибка при сохранении пользователя в таблице User: "+err.Error(), http.StatusInternalServerError)
 			return
+		}
+	} else {
+		// Если пользователь существует, обновляем его провайдер, если необходимо
+		if user.Provider != "LinkedIn" {
+			user.Provider = "LinkedIn"
+			if err := config.DB.Save(&user).Error; err != nil {
+				http.Error(w, "Ошибка при обновлении провайдера пользователя: "+err.Error(), http.StatusInternalServerError)
+				return
+			}
 		}
 	}
 

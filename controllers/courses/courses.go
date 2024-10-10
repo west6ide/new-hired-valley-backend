@@ -41,6 +41,18 @@ func CreateCourse(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Неверный формат данных", http.StatusBadRequest)
 		return
 	}
+
+	// Проверка обязательных полей
+	if course.Title == "" || course.Description == "" {
+		http.Error(w, "Необходимо заполнить все обязательные поля", http.StatusBadRequest)
+		return
+	}
+
+	// Сохраняем курс в базу данных
+	if err := config.DB.Create(&course).Error; err != nil {
+		http.Error(w, "Ошибка при сохранении курса", http.StatusInternalServerError)
+		return
+	}
 	config.DB.Create(&course)
 	json.NewEncoder(w).Encode(course)
 }

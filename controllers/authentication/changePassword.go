@@ -1,4 +1,4 @@
-package controllers
+package authentication
 
 import (
 	"encoding/json"
@@ -6,7 +6,7 @@ import (
 	"github.com/dgrijalva/jwt-go"
 	"golang.org/x/crypto/bcrypt"
 	"hired-valley-backend/config"
-	"hired-valley-backend/models"
+	"hired-valley-backend/models/authenticationUsers"
 	"net/http"
 	"strings"
 )
@@ -35,7 +35,7 @@ func ChangePassword(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Поиск пользователя по email из токена
-	var user models.User
+	var user authenticationUsers.User
 	if err := config.DB.Where("email = ? AND provider = ?", claims.Email, "local").First(&user).Error; err != nil {
 		http.Error(w, "User not found", http.StatusUnauthorized)
 		return

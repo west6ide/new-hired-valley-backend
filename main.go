@@ -3,8 +3,10 @@ package main
 import (
 	"fmt"
 	"hired-valley-backend/config"
-	"hired-valley-backend/controllers"
-	"hired-valley-backend/models"
+	"hired-valley-backend/controllers/authentication"
+	"hired-valley-backend/controllers/courses"
+	"hired-valley-backend/models/authenticationUsers"
+	"hired-valley-backend/models/coursesModels"
 	"log"
 	"net/http"
 	"os"
@@ -23,23 +25,32 @@ func main() {
 	}
 
 	// Выполняем миграцию базы данных
-	err = config.DB.AutoMigrate(&models.GoogleUser{}, &models.User{}, &models.LinkedInUser{})
+	err = config.DB.AutoMigrate(&authenticationUsers.GoogleUser{}, &authenticationUsers.User{}, &authenticationUsers.LinkedInUser{}, &coursesModels.Course{}, &coursesModels.Module{}, &coursesModels.Review{}, &coursesModels.Progress{})
 	if err != nil {
 		log.Fatalf("Ошибка миграции базы данных: %v", err)
 	}
 
 	// Настраиваем маршруты
 	http.HandleFunc("/", handleHome)
-	http.HandleFunc("/login/google", controllers.HandleGoogleLogin)
-	http.HandleFunc("/callback/google", controllers.HandleGoogleCallback)
-	http.HandleFunc("/login/linkedin", controllers.HandleLinkedInLogin)
-	http.HandleFunc("/callback/linkedin", controllers.HandleLinkedInCallback)
+	http.HandleFunc("/login/google", authentication.HandleGoogleLogin)
+	http.HandleFunc("/callback/google", authentication.HandleGoogleCallback)
+	http.HandleFunc("/login/linkedin", authentication.HandleLinkedInLogin)
+	http.HandleFunc("/callback/linkedin", authentication.HandleLinkedInCallback)
 
-	http.HandleFunc("/register", controllers.Register)
-	http.HandleFunc("/login", controllers.Login)
-	http.HandleFunc("/api/profile", controllers.GetProfile)
-	http.HandleFunc("/api/logout", controllers.Logout)
-	http.HandleFunc("/change-password", controllers.ChangePassword)
+	http.HandleFunc("/register", authentication.Register)
+	http.HandleFunc("/login", authentication.Login)
+	http.HandleFunc("/api/profile", authentication.GetProfile)
+	http.HandleFunc("/api/logout", authentication.Logout)
+	http.HandleFunc("/change-password", authentication.ChangePassword)
+
+	http.HandleFunc("/courses", courses.GetCourses)
+	http.HandleFunc("/courses/{id}", courses.GetCourseByID)
+	http.HandleFunc("/courses", courses.CreateCourse)
+	http.HandleFunc("/courses/{id}", courses.UpdateCourse)
+	http.HandleFunc("/courses/{id}", courses.DeleteCourse)
+
+	http.HandleFunc("/courses/{course_id}/modules", courses.CreateModule)
+	http.HandleFunc("/modules/{id}", courses.UpdateModule)
 
 	// Запускаем сервер
 	log.Printf("Сервер запущен на порту %s", port)
@@ -55,7 +66,7 @@ func handleHome(w http.ResponseWriter, r *http.Request) {
 
 	if user != nil {
 		switch usr := user.(type) {
-		case models.GoogleUser:
+		case authenticationUsers.GoogleUser:
 			html := fmt.Sprintf(`<html><body>
 				<p>Добро пожаловать, %s!</p>
 				<a href="/logout">Выйти</a><br>
@@ -64,7 +75,7 @@ func handleHome(w http.ResponseWriter, r *http.Request) {
 				</form>
 			</body></html>`, usr.FirstName)
 			fmt.Fprint(w, html)
-		case models.LinkedInUser:
+		case authenticationUsers.LinkedInUser:
 			html := fmt.Sprintf(`<html><body>
 				<p>Добро пожаловать, %s!</p>
 				<a href="/logout">Выйти</a><br>

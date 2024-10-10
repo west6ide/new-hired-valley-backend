@@ -1,4 +1,4 @@
-package controllers
+package authentication
 
 import (
 	"encoding/json"
@@ -7,7 +7,7 @@ import (
 	"golang.org/x/oauth2"
 	"golang.org/x/oauth2/google"
 	"hired-valley-backend/config"
-	"hired-valley-backend/models"
+	"hired-valley-backend/models/authenticationUsers"
 	"io/ioutil"
 	"net/http"
 	"os"
@@ -77,12 +77,12 @@ func HandleGoogleCallback(w http.ResponseWriter, r *http.Request) {
 	lastName := userInfo["family_name"].(string)
 
 	// Проверка, существует ли пользователь с таким email в таблице User
-	var user models.User
+	var user authenticationUsers.User
 	config.DB.Where("email = ?", email).First(&user)
 
 	if user.ID == 0 {
 		// Если пользователь не найден, создаем нового пользователя
-		user = models.User{
+		user = authenticationUsers.User{
 			Email:       email,
 			Name:        firstName + " " + lastName,
 			Provider:    "google",
@@ -92,12 +92,12 @@ func HandleGoogleCallback(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Проверка в таблице GoogleUser
-	var googleUser models.GoogleUser
+	var googleUser authenticationUsers.GoogleUser
 	config.DB.Where("google_id = ?", googleID).First(&googleUser)
 
 	if googleUser.GoogleID == "" {
 		// Если GoogleUser не найден, создаем нового
-		googleUser = models.GoogleUser{
+		googleUser = authenticationUsers.GoogleUser{
 			UserID:      user.ID, // Связь с таблицей User
 			GoogleID:    googleID,
 			Email:       email,

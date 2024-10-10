@@ -24,7 +24,15 @@ func main() {
 	}
 
 	// Выполняем миграцию базы данных
-	err = config.DB.AutoMigrate(&models.GoogleUser{}, &models.User{}, &models.LinkedInUser{}, &models.Course{}, &models.Module{}, &models.Review{}, &models.Progress{})
+	err = config.DB.AutoMigrate(
+		&models.GoogleUser{},
+		&models.User{},
+		&models.LinkedInUser{},
+		&models.Course{},
+		&models.Module{},
+		&models.Review{},
+		&models.Progress{},
+	)
 	if err != nil {
 		log.Fatalf("Ошибка миграции базы данных: %v", err)
 	}
@@ -43,8 +51,8 @@ func main() {
 	http.HandleFunc("/change-password", authentication.ChangePassword)
 
 	http.HandleFunc("/courses", courses.GetCourses)
+	http.HandleFunc("/courses/create", courses.CreateCourse)
 	http.HandleFunc("/courses/{id}", courses.GetCourseByID)
-	http.HandleFunc("/courses", courses.CreateCourse)
 	http.HandleFunc("/courses/{id}", courses.UpdateCourse)
 	http.HandleFunc("/courses/{id}", courses.DeleteCourse)
 

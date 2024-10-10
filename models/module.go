@@ -1,6 +1,8 @@
-package coursesModels
+package models
 
-import "time"
+import (
+	"time"
+)
 
 type Module struct {
 	ID        uint `gorm:"primaryKey"`

@@ -7,7 +7,7 @@ import (
 	"golang.org/x/oauth2"
 	"golang.org/x/oauth2/linkedin"
 	"hired-valley-backend/config"
-	"hired-valley-backend/models/authenticationUsers"
+	"hired-valley-backend/models"
 	"net/http"
 	"os"
 )
@@ -59,10 +59,10 @@ func HandleLinkedInCallback(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Проверка на существование пользователя в базе данных users
-	var user authenticationUsers.User
+	var user models.User
 	if err := config.DB.Where("email = ?", userInfo["email"].(string)).First(&user).Error; err != nil {
 		// Если пользователя нет, создаем его
-		user = authenticationUsers.User{
+		user = models.User{
 			Email:       userInfo["email"].(string),
 			Name:        userInfo["given_name"].(string),
 			Provider:    "LinkedIn",        // Устанавливаем провайдер как LinkedIn
@@ -83,10 +83,10 @@ func HandleLinkedInCallback(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Проверка на существование пользователя в базе данных LinkedInUser
-	var linkedInUser authenticationUsers.LinkedInUser
+	var linkedInUser models.LinkedInUser
 	if err := config.DB.Where("sub = ?", userInfo["sub"]).First(&linkedInUser).Error; err != nil {
 		// Если пользователя LinkedIn нет, создаем его
-		linkedInUser = authenticationUsers.LinkedInUser{
+		linkedInUser = models.LinkedInUser{
 			UserID:      user.ID, // Ссылка на существующего пользователя
 			Sub:         userInfo["sub"].(string),
 			FirstName:   userInfo["given_name"].(string),

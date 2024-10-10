@@ -1,4 +1,4 @@
-package coursesModels
+package models
 
 import "time"
 

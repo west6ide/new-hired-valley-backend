@@ -1,4 +1,4 @@
-package authenticationUsers
+package models
 
 import (
 	"gorm.io/gorm"

@@ -3,7 +3,7 @@ package courses
 import (
 	"encoding/json"
 	"hired-valley-backend/config"
-	"hired-valley-backend/models/coursesModels"
+	"hired-valley-backend/models"
 	"net/http"
 	"strconv"
 
@@ -16,7 +16,7 @@ func CreateModule(w http.ResponseWriter, r *http.Request) {
 	params := mux.Vars(r)
 	courseID, _ := strconv.Atoi(params["course_id"])
 
-	var module coursesModels.Module
+	var module models.Module
 	if err := json.NewDecoder(r.Body).Decode(&module); err != nil {
 		http.Error(w, "Неверный формат данных", http.StatusBadRequest)
 		return
@@ -42,7 +42,7 @@ func UpdateModule(w http.ResponseWriter, r *http.Request) {
 	params := mux.Vars(r)
 	moduleID, _ := strconv.Atoi(params["id"])
 
-	var module coursesModels.Module
+	var module models.Module
 	if err := config.DB.First(&module, moduleID).Error; err != nil {
 		if err == gorm.ErrRecordNotFound {
 			http.Error(w, "Модуль не найден", http.StatusNotFound)

@@ -6,14 +6,14 @@ import (
 	"github.com/gorilla/mux"
 	"gorm.io/gorm"
 	"hired-valley-backend/config"
-	"hired-valley-backend/models/coursesModels"
+	"hired-valley-backend/models"
 	"net/http"
 	"strconv"
 )
 
 // Получение всех курсов
 func GetCourses(w http.ResponseWriter, r *http.Request) {
-	var courses coursesModels.Course
+	var courses models.Course
 	config.DB.Preload("Modules").Find(&courses)
 	json.NewEncoder(w).Encode(courses)
 }
@@ -22,7 +22,7 @@ func GetCourses(w http.ResponseWriter, r *http.Request) {
 func GetCourseByID(w http.ResponseWriter, r *http.Request) {
 	params := mux.Vars(r)
 	id, _ := strconv.Atoi(params["id"])
-	var course coursesModels.Course
+	var course models.Course
 	if err := config.DB.Preload("Modules").First(&course, id).Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			http.Error(w, "Курс не найден", http.StatusNotFound)
@@ -36,7 +36,7 @@ func GetCourseByID(w http.ResponseWriter, r *http.Request) {
 
 // Создание курса
 func CreateCourse(w http.ResponseWriter, r *http.Request) {
-	var course coursesModels.Course
+	var course models.Course
 	if err := json.NewDecoder(r.Body).Decode(&course); err != nil {
 		http.Error(w, "Неверный формат данных", http.StatusBadRequest)
 		return
@@ -49,7 +49,7 @@ func CreateCourse(w http.ResponseWriter, r *http.Request) {
 func UpdateCourse(w http.ResponseWriter, r *http.Request) {
 	params := mux.Vars(r)
 	id, _ := strconv.Atoi(params["id"])
-	var course coursesModels.Course
+	var course models.Course
 	if err := config.DB.First(&course, id).Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			http.Error(w, "Курс не найден", http.StatusNotFound)
@@ -70,7 +70,7 @@ func UpdateCourse(w http.ResponseWriter, r *http.Request) {
 func DeleteCourse(w http.ResponseWriter, r *http.Request) {
 	params := mux.Vars(r)
 	id, _ := strconv.Atoi(params["id"])
-	var course coursesModels.Course
+	var course models.Course
 	if err := config.DB.First(&course, id).Error; err != nil {
 		if err == gorm.ErrRecordNotFound {
 			http.Error(w, "Курс не найден", http.StatusNotFound)

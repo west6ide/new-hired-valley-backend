@@ -5,8 +5,7 @@ import (
 	"hired-valley-backend/config"
 	"hired-valley-backend/controllers/authentication"
 	"hired-valley-backend/controllers/courses"
-	"hired-valley-backend/models/authenticationUsers"
-	"hired-valley-backend/models/coursesModels"
+	"hired-valley-backend/models"
 	"log"
 	"net/http"
 	"os"
@@ -25,7 +24,7 @@ func main() {
 	}
 
 	// Выполняем миграцию базы данных
-	err = config.DB.AutoMigrate(&authenticationUsers.GoogleUser{}, &authenticationUsers.User{}, &authenticationUsers.LinkedInUser{}, &coursesModels.Course{}, &coursesModels.Module{}, &coursesModels.Review{}, &coursesModels.Progress{})
+	err = config.DB.AutoMigrate(&models.GoogleUser{}, &models.User{}, &models.LinkedInUser{}, &models.Course{}, &models.Module{}, &models.Review{}, &models.Progress{})
 	if err != nil {
 		log.Fatalf("Ошибка миграции базы данных: %v", err)
 	}
@@ -66,7 +65,7 @@ func handleHome(w http.ResponseWriter, r *http.Request) {
 
 	if user != nil {
 		switch usr := user.(type) {
-		case authenticationUsers.GoogleUser:
+		case models.GoogleUser:
 			html := fmt.Sprintf(`<html><body>
 				<p>Добро пожаловать, %s!</p>
 				<a href="/logout">Выйти</a><br>
@@ -75,7 +74,7 @@ func handleHome(w http.ResponseWriter, r *http.Request) {
 				</form>
 			</body></html>`, usr.FirstName)
 			fmt.Fprint(w, html)
-		case authenticationUsers.LinkedInUser:
+		case models.LinkedInUser:
 			html := fmt.Sprintf(`<html><body>
 				<p>Добро пожаловать, %s!</p>
 				<a href="/logout">Выйти</a><br>

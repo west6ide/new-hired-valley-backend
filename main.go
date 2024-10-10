@@ -53,8 +53,8 @@ func main() {
 	http.HandleFunc("/courses", courses.GetCourses)
 	http.HandleFunc("/courses/create", courses.CreateCourse)
 	http.HandleFunc("/courses/{id}", courses.GetCourseByID)
-	http.HandleFunc("/courses/{id}", courses.UpdateCourse)
-	http.HandleFunc("/courses/{id}", courses.DeleteCourse)
+	http.HandleFunc("/courses/{id}/update", courses.UpdateCourse)
+	http.HandleFunc("/courses/{id}/delete", courses.DeleteCourse)
 
 	http.HandleFunc("/courses/{course_id}/modules", courses.CreateModule)
 	http.HandleFunc("/modules/{id}", courses.UpdateModule)

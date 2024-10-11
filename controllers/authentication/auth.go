@@ -28,6 +28,8 @@ func Register(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	log.Printf("Попытка регистрации пользователя: %+v", user)
+
 	// Проверяем, существует ли пользователь с таким email и обычной авторизацией (provider = local)
 	var existingUser models.User
 	if err := config.DB.Where("email = ? AND provider = ?", user.Email, "local").First(&existingUser).Error; err == nil {
@@ -63,8 +65,7 @@ func Register(w http.ResponseWriter, r *http.Request) {
 	// Сохраняем пользователя и токен в базе данных
 	user.AccessToken = tokenString
 	if err := config.DB.Create(&user).Error; err != nil {
-		// Логирование ошибки для отладки
-		log.Printf("Ошибка при создании пользователя: %v", err)
+		log.Printf("Ошибка при создании пользователя в базе данных: %v", err)
 		http.Error(w, "Error creating user", http.StatusInternalServerError)
 		return
 	}

@@ -3,18 +3,23 @@ package courses
 import (
 	"encoding/json"
 	"errors"
+	"log"
+	"net/http"
+	"strconv"
+
 	"github.com/gorilla/mux"
 	"gorm.io/gorm"
 	"hired-valley-backend/config"
 	"hired-valley-backend/models"
-	"net/http"
-	"strconv"
 )
 
 // Получение всех курсов
 func GetCourses(w http.ResponseWriter, r *http.Request) {
-	var courses models.Course
-	config.DB.Preload("Modules").Find(&courses)
+	var courses []models.Course
+	if err := config.DB.Preload("Modules").Find(&courses).Error; err != nil {
+		http.Error(w, "Ошибка при получении курсов", http.StatusInternalServerError)
+		return
+	}
 	json.NewEncoder(w).Encode(courses)
 }
 
@@ -38,22 +43,32 @@ func GetCourseByID(w http.ResponseWriter, r *http.Request) {
 func CreateCourse(w http.ResponseWriter, r *http.Request) {
 	var course models.Course
 	if err := json.NewDecoder(r.Body).Decode(&course); err != nil {
+		log.Printf("Ошибка при декодировании тела запроса: %v", err)
 		http.Error(w, "Неверный формат данных", http.StatusBadRequest)
 		return
 	}
 
 	// Проверка обязательных полей
-	if course.Title == "" || course.Description == "" {
+	if course.Title == "" || course.Description == "" || course.InstructorID == 0 {
 		http.Error(w, "Необходимо заполнить все обязательные поля", http.StatusBadRequest)
+		return
+	}
+
+	// Проверяем, существует ли инструктор с данным ID
+	var instructor models.User
+	if err := config.DB.First(&instructor, course.InstructorID).Error; err != nil {
+		log.Printf("Инструктор не найден: %v", err)
+		http.Error(w, "Инструктор не найден", http.StatusNotFound)
 		return
 	}
 
 	// Сохраняем курс в базу данных
 	if err := config.DB.Create(&course).Error; err != nil {
+		log.Printf("Ошибка при сохранении курса: %v", err)
 		http.Error(w, "Ошибка при сохранении курса", http.StatusInternalServerError)
 		return
 	}
-	config.DB.Create(&course)
+
 	json.NewEncoder(w).Encode(course)
 }
 
@@ -92,5 +107,5 @@ func DeleteCourse(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	config.DB.Delete(&course)
-	json.NewEncoder(w).Encode("Курс успешно удален")
+	json.NewEncoder(w).Encode(map[string]string{"message": "Курс успешно удален"})
 }

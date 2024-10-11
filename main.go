@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"hired-valley-backend/config"
 	"hired-valley-backend/controllers/authentication"
-	"hired-valley-backend/controllers/courses"
 	"hired-valley-backend/models"
 	"log"
 	"net/http"
@@ -28,10 +27,6 @@ func main() {
 		&models.GoogleUser{},
 		&models.User{},
 		&models.LinkedInUser{},
-		&models.Course{},
-		&models.Module{},
-		&models.Review{},
-		&models.Progress{},
 	)
 	if err != nil {
 		log.Fatalf("Ошибка миграции базы данных: %v", err)
@@ -48,16 +43,6 @@ func main() {
 	http.HandleFunc("/login", authentication.Login)
 	http.HandleFunc("/api/profile", authentication.GetProfile)
 	http.HandleFunc("/api/logout", authentication.Logout)
-	http.HandleFunc("/change-password", authentication.ChangePassword)
-
-	http.HandleFunc("/courses", courses.GetCourses)
-	http.HandleFunc("/courses/create", courses.CreateCourse)
-	http.HandleFunc("/courses/{id}", courses.GetCourseByID)
-	http.HandleFunc("/courses/{id}/update", courses.UpdateCourse)
-	http.HandleFunc("/courses/{id}/delete", courses.DeleteCourse)
-
-	http.HandleFunc("/courses/{course_id}/modules", courses.CreateModule)
-	http.HandleFunc("/modules/{id}", courses.UpdateModule)
 
 	// Запускаем сервер
 	log.Printf("Сервер запущен на порту %s", port)

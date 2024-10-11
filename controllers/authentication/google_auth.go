@@ -34,9 +34,9 @@ func init() {
 	// Настройки для сессий (опционально для безопасности)
 	store.Options = &sessions.Options{
 		Path:     "/",
-		MaxAge:   3600 * 8, // Время жизни сессии в секундах
-		HttpOnly: true,     // Защищает от JavaScript-доступа
-		Secure:   true,     // Используйте true в случае HTTPS
+		MaxAge:   3600 * 8, // Время жизни сессии в секундах (8 часов)
+		HttpOnly: true,     // Куки не доступны через JavaScript
+		Secure:   false,    // Используйте true для HTTPS
 		SameSite: http.SameSiteStrictMode,
 	}
 }
@@ -177,10 +177,17 @@ func HandleGoogleCallback(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	// Сохраняем данные пользователя в сессии
-	session, _ := store.Get(r, "session-name")
-	session.Values["user"] = user
-	if err := session.Save(r, w); err != nil {
+	// Сохраняем минимальные данные пользователя в сессии (например, только ID)
+	session, err := store.Get(r, "session-name")
+	if err != nil {
+		log.Printf("Ошибка при получении сессии: %s", err.Error())
+		http.Error(w, "Ошибка получения сессии", http.StatusInternalServerError)
+		return
+	}
+
+	session.Values["user_id"] = user.ID // Сохраняем только ID пользователя
+	err = session.Save(r, w)
+	if err != nil {
 		log.Printf("Ошибка при сохранении сессии: %s", err.Error())
 		http.Error(w, "Ошибка сохранения сессии", http.StatusInternalServerError)
 		return

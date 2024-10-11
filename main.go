@@ -24,12 +24,23 @@ func main() {
 
 	// Выполняем миграцию базы данных
 	err = config.DB.AutoMigrate(
-		&models.GoogleUser{},
 		&models.User{},
-		&models.LinkedInUser{},
 	)
 	if err != nil {
 		log.Fatalf("Ошибка миграции базы данных: %v", err)
+	}
+
+	// Проверка подключения к базе данных
+	sqlDB, err := config.DB.DB()
+	if err != nil {
+		log.Fatalf("Ошибка получения подключения к базе данных: %v", err)
+	}
+
+	err = sqlDB.Ping()
+	if err != nil {
+		log.Fatalf("Ошибка подключения к базе данных: %v", err)
+	} else {
+		log.Println("Подключение к базе данных успешно")
 	}
 
 	// Настраиваем маршруты

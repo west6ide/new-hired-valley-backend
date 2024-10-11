@@ -2,6 +2,7 @@ package authentication
 
 import (
 	"encoding/json"
+	"fmt"
 	"github.com/dgrijalva/jwt-go"
 	"golang.org/x/crypto/bcrypt"
 	"hired-valley-backend/config"
@@ -66,7 +67,8 @@ func Register(w http.ResponseWriter, r *http.Request) {
 	user.AccessToken = tokenString
 	if err := config.DB.Create(&user).Error; err != nil {
 		log.Printf("Ошибка при создании пользователя в базе данных: %v", err)
-		http.Error(w, "Error creating user", http.StatusInternalServerError)
+		log.Printf("Детали пользователя: %+v", user)
+		http.Error(w, fmt.Sprintf("Error creating user: %v", err), http.StatusInternalServerError)
 		return
 	}
 

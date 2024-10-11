@@ -2,13 +2,13 @@ package authentication
 
 import (
 	"encoding/json"
-	"fmt"
 	"github.com/gorilla/sessions"
 	"golang.org/x/oauth2"
 	"golang.org/x/oauth2/google"
 	"hired-valley-backend/config"
 	"hired-valley-backend/models"
 	"io/ioutil"
+	"log"
 	"net/http"
 	"os"
 )
@@ -24,6 +24,13 @@ var (
 	store = sessions.NewCookieStore([]byte("something-very-secret"))
 )
 
+func init() {
+	// Проверка, что все переменные окружения заданы
+	if googleOauthConfig.ClientID == "" || googleOauthConfig.ClientSecret == "" || googleOauthConfig.RedirectURL == "" {
+		log.Fatal("Не установлены переменные окружения для Google OAuth")
+	}
+}
+
 // HandleGoogleLogin initiates Google OAuth login
 func HandleGoogleLogin(w http.ResponseWriter, r *http.Request) {
 	state := "google"
@@ -35,29 +42,29 @@ func HandleGoogleLogin(w http.ResponseWriter, r *http.Request) {
 func HandleGoogleCallback(w http.ResponseWriter, r *http.Request) {
 	state := "google"
 	if r.FormValue("state") != state {
-		fmt.Println("State is not valid")
+		log.Println("Invalid OAuth state")
 		http.Redirect(w, r, "/", http.StatusTemporaryRedirect)
 		return
 	}
 
-	token, err := googleOauthConfig.Exchange(oauth2.NoContext, r.FormValue("code"))
+	token, err := googleOauthConfig.Exchange(r.Context(), r.FormValue("code"))
 	if err != nil {
-		fmt.Printf("Could not get token: %s\n", err.Error())
+		log.Printf("Error while exchanging code for token: %s", err.Error())
 		http.Redirect(w, r, "/", http.StatusTemporaryRedirect)
 		return
 	}
 
 	resp, err := http.Get("https://www.googleapis.com/oauth2/v2/userinfo?access_token=" + token.AccessToken)
 	if err != nil {
-		fmt.Printf("Could not create get request: %s\n", err.Error())
+		log.Printf("Error while fetching user info: %s", err.Error())
 		http.Redirect(w, r, "/", http.StatusTemporaryRedirect)
 		return
 	}
-
 	defer resp.Body.Close()
+
 	content, err := ioutil.ReadAll(resp.Body)
 	if err != nil {
-		fmt.Printf("Could not parse response: %s\n", err.Error())
+		log.Printf("Error reading response: %s", err.Error())
 		http.Redirect(w, r, "/", http.StatusTemporaryRedirect)
 		return
 	}
@@ -65,60 +72,107 @@ func HandleGoogleCallback(w http.ResponseWriter, r *http.Request) {
 	// Convert JSON response to structure
 	var userInfo map[string]interface{}
 	if err := json.Unmarshal(content, &userInfo); err != nil {
-		fmt.Printf("Could not parse user info: %s\n", err.Error())
+		log.Printf("Error parsing user info: %s", err.Error())
 		http.Redirect(w, r, "/", http.StatusTemporaryRedirect)
 		return
 	}
 
-	// Extract user info
-	googleID := userInfo["id"].(string)
-	email := userInfo["email"].(string)
-	firstName := userInfo["given_name"].(string)
-	lastName := userInfo["family_name"].(string)
+	// Extract user info with type assertion
+	googleID, ok := userInfo["id"].(string)
+	if !ok {
+		log.Println("Error extracting Google ID")
+		http.Redirect(w, r, "/", http.StatusTemporaryRedirect)
+		return
+	}
 
-	// Проверка, существует ли пользователь с таким email в таблице User
+	email, ok := userInfo["email"].(string)
+	if !ok {
+		log.Println("Error extracting email")
+		http.Redirect(w, r, "/", http.StatusTemporaryRedirect)
+		return
+	}
+
+	firstName, ok := userInfo["given_name"].(string)
+	if !ok {
+		log.Println("Error extracting first name")
+		http.Redirect(w, r, "/", http.StatusTemporaryRedirect)
+		return
+	}
+
+	lastName, ok := userInfo["family_name"].(string)
+	if !ok {
+		log.Println("Error extracting last name")
+		http.Redirect(w, r, "/", http.StatusTemporaryRedirect)
+		return
+	}
+
+	// Проверка, существует ли пользователь с таким email
 	var user models.User
-	config.DB.Where("email = ?", email).First(&user)
+	if err := config.DB.Where("email = ?", email).First(&user).Error; err != nil {
+		log.Printf("Error fetching user: %s", err.Error())
+		http.Error(w, "Error fetching user", http.StatusInternalServerError)
+		return
+	}
 
 	if user.ID == 0 {
-		// Если пользователь не найден, создаем нового пользователя
+		// Если пользователь не найден, создаем нового
 		user = models.User{
 			Email:       email,
 			Name:        firstName + " " + lastName,
 			Provider:    "google",
 			AccessToken: token.AccessToken,
 		}
-		config.DB.Create(&user)
+		if err := config.DB.Create(&user).Error; err != nil {
+			log.Printf("Error creating user: %s", err.Error())
+			http.Error(w, "Error creating user", http.StatusInternalServerError)
+			return
+		}
 	}
 
 	// Проверка в таблице GoogleUser
 	var googleUser models.GoogleUser
-	config.DB.Where("google_id = ?", googleID).First(&googleUser)
+	if err := config.DB.Where("google_id = ?", googleID).First(&googleUser).Error; err != nil {
+		log.Printf("Error fetching Google user: %s", err.Error())
+		http.Error(w, "Error fetching Google user", http.StatusInternalServerError)
+		return
+	}
 
 	if googleUser.GoogleID == "" {
 		// Если GoogleUser не найден, создаем нового
 		googleUser = models.GoogleUser{
-			UserID:      user.ID, // Связь с таблицей User
+			UserID:      user.ID,
 			GoogleID:    googleID,
 			Email:       email,
 			FirstName:   firstName,
 			LastName:    lastName,
 			AccessToken: token.AccessToken,
 		}
-		config.DB.Create(&googleUser)
+		if err := config.DB.Create(&googleUser).Error; err != nil {
+			log.Printf("Error creating Google user: %s", err.Error())
+			http.Error(w, "Error creating Google user", http.StatusInternalServerError)
+			return
+		}
 	} else {
-		// Если GoogleUser найден, обновляем его информацию
+		// Обновляем информацию, если GoogleUser существует
 		googleUser.Email = email
 		googleUser.FirstName = firstName
 		googleUser.LastName = lastName
 		googleUser.AccessToken = token.AccessToken
-		config.DB.Save(&googleUser)
+		if err := config.DB.Save(&googleUser).Error; err != nil {
+			log.Printf("Error updating Google user: %s", err.Error())
+			http.Error(w, "Error updating Google user", http.StatusInternalServerError)
+			return
+		}
 	}
 
 	// Сохраняем данные пользователя в сессии
 	session, _ := store.Get(r, "session-name")
 	session.Values["user"] = user
-	session.Save(r, w)
+	if err := session.Save(r, w); err != nil {
+		log.Printf("Error saving session: %s", err.Error())
+		http.Error(w, "Error saving session", http.StatusInternalServerError)
+		return
+	}
 
-	fmt.Fprintf(w, "Response: %s", content)
+	http.Redirect(w, r, "/welcome", http.StatusTemporaryRedirect)
 }

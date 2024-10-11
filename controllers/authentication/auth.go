@@ -6,6 +6,7 @@ import (
 	"golang.org/x/crypto/bcrypt"
 	"hired-valley-backend/config"
 	"hired-valley-backend/models"
+	"log"
 	"net/http"
 	"os"
 	"strings"
@@ -62,6 +63,8 @@ func Register(w http.ResponseWriter, r *http.Request) {
 	// Сохраняем пользователя и токен в базе данных
 	user.AccessToken = tokenString
 	if err := config.DB.Create(&user).Error; err != nil {
+		// Логирование ошибки для отладки
+		log.Printf("Ошибка при создании пользователя: %v", err)
 		http.Error(w, "Error creating user", http.StatusInternalServerError)
 		return
 	}

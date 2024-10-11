@@ -47,6 +47,11 @@ func Register(w http.ResponseWriter, r *http.Request) {
 	user.Password = string(hashedPassword)
 	user.Provider = "local" // Устанавливаем провайдер как "local" для обычной регистрации
 
+	// Если роль не указана, присваиваем роль по умолчанию
+	if user.Role == "" {
+		user.Role = "user" // Роль по умолчанию
+	}
+
 	// Создание JWT токена
 	expirationTime := time.Now().Add(24 * time.Hour)
 	claims := &Claims{

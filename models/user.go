@@ -14,9 +14,8 @@ type User struct {
 	City         string `json:"city"`                                // Город пользователя
 	Income       int    `json:"income"`                              // Уровень дохода пользователя
 	AccessToken  string `json:"token"`
-	RefreshToken string `json:"refreshToken"`     // Access токен
-	Provider     string `json:"provider"`         // Обычная авторизация, Google или LinkedIn
-	Role         string `gorm:"size:50;not null"` // roles: student, instructor, admin
+	RefreshToken string `json:"refreshToken"` // Access токен
+	Provider     string `json:"provider"`     // Обычная авторизация, Google или LinkedIn
 	CreatedAt    time.Time
 	UpdatedAt    time.Time
 	DeletedAt    gorm.DeletedAt `gorm:"index"`

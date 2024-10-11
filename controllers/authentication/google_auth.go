@@ -22,13 +22,22 @@ var (
 		Scopes:       []string{"https://www.googleapis.com/auth/userinfo.email", "https://www.googleapis.com/auth/userinfo.profile"},
 		Endpoint:     google.Endpoint,
 	}
-	store = sessions.NewCookieStore([]byte("something-very-secret"))
+	store = sessions.NewCookieStore([]byte(os.Getenv("SESSION_SECRET")))
 )
 
 func init() {
 	// Проверка, что все переменные окружения заданы
 	if googleOauthConfig.ClientID == "" || googleOauthConfig.ClientSecret == "" || googleOauthConfig.RedirectURL == "" {
 		log.Fatal("Не установлены переменные окружения для Google OAuth")
+	}
+
+	// Настройки для сессий (опционально для безопасности)
+	store.Options = &sessions.Options{
+		Path:     "/",
+		MaxAge:   3600 * 8, // Время жизни сессии в секундах
+		HttpOnly: true,     // Защищает от JavaScript-доступа
+		Secure:   true,     // Используйте true в случае HTTPS
+		SameSite: http.SameSiteStrictMode,
 	}
 }
 

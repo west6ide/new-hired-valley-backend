@@ -5,6 +5,7 @@ import (
 	"github.com/gorilla/sessions"
 	"golang.org/x/oauth2"
 	"golang.org/x/oauth2/google"
+	"gorm.io/gorm"
 	"hired-valley-backend/config"
 	"hired-valley-backend/models"
 	"io/ioutil"
@@ -109,22 +110,23 @@ func HandleGoogleCallback(w http.ResponseWriter, r *http.Request) {
 	// Проверка, существует ли пользователь с таким email
 	var user models.User
 	if err := config.DB.Where("email = ?", email).First(&user).Error; err != nil {
-		log.Printf("Error fetching user: %s", err.Error())
-		http.Error(w, "Error fetching user", http.StatusInternalServerError)
-		return
-	}
-
-	if user.ID == 0 {
 		// Если пользователь не найден, создаем нового
-		user = models.User{
-			Email:       email,
-			Name:        firstName + " " + lastName,
-			Provider:    "google",
-			AccessToken: token.AccessToken,
-		}
-		if err := config.DB.Create(&user).Error; err != nil {
-			log.Printf("Error creating user: %s", err.Error())
-			http.Error(w, "Error creating user", http.StatusInternalServerError)
+		if err == gorm.ErrRecordNotFound {
+			log.Printf("Пользователь с email %s не найден, создаем нового", email)
+			user = models.User{
+				Email:       email,
+				Name:        firstName + " " + lastName,
+				Provider:    "google",
+				AccessToken: token.AccessToken,
+			}
+			if err := config.DB.Create(&user).Error; err != nil {
+				log.Printf("Ошибка при создании пользователя: %v", err)
+				http.Error(w, "Ошибка создания пользователя", http.StatusInternalServerError)
+				return
+			}
+		} else {
+			log.Printf("Ошибка при попытке найти пользователя с email %s: %v", email, err)
+			http.Error(w, "Ошибка поиска пользователя", http.StatusInternalServerError)
 			return
 		}
 	}
@@ -132,35 +134,36 @@ func HandleGoogleCallback(w http.ResponseWriter, r *http.Request) {
 	// Проверка в таблице GoogleUser
 	var googleUser models.GoogleUser
 	if err := config.DB.Where("google_id = ?", googleID).First(&googleUser).Error; err != nil {
-		log.Printf("Error fetching Google user: %s", err.Error())
-		http.Error(w, "Error fetching Google user", http.StatusInternalServerError)
-		return
-	}
-
-	if googleUser.GoogleID == "" {
 		// Если GoogleUser не найден, создаем нового
-		googleUser = models.GoogleUser{
-			UserID:      user.ID,
-			GoogleID:    googleID,
-			Email:       email,
-			FirstName:   firstName,
-			LastName:    lastName,
-			AccessToken: token.AccessToken,
-		}
-		if err := config.DB.Create(&googleUser).Error; err != nil {
-			log.Printf("Error creating Google user: %s", err.Error())
-			http.Error(w, "Error creating Google user", http.StatusInternalServerError)
+		if err == gorm.ErrRecordNotFound {
+			log.Printf("GoogleUser с ID %s не найден, создаем нового", googleID)
+			googleUser = models.GoogleUser{
+				UserID:      user.ID,
+				GoogleID:    googleID,
+				Email:       email,
+				FirstName:   firstName,
+				LastName:    lastName,
+				AccessToken: token.AccessToken,
+			}
+			if err := config.DB.Create(&googleUser).Error; err != nil {
+				log.Printf("Ошибка при создании GoogleUser: %v", err)
+				http.Error(w, "Ошибка создания GoogleUser", http.StatusInternalServerError)
+				return
+			}
+		} else {
+			log.Printf("Ошибка при попытке найти GoogleUser с Google ID %s: %v", googleID, err)
+			http.Error(w, "Ошибка поиска GoogleUser", http.StatusInternalServerError)
 			return
 		}
 	} else {
-		// Обновляем информацию, если GoogleUser существует
+		// Если GoogleUser найден, обновляем информацию
 		googleUser.Email = email
 		googleUser.FirstName = firstName
 		googleUser.LastName = lastName
 		googleUser.AccessToken = token.AccessToken
 		if err := config.DB.Save(&googleUser).Error; err != nil {
-			log.Printf("Error updating Google user: %s", err.Error())
-			http.Error(w, "Error updating Google user", http.StatusInternalServerError)
+			log.Printf("Ошибка при обновлении GoogleUser: %v", err)
+			http.Error(w, "Ошибка обновления GoogleUser", http.StatusInternalServerError)
 			return
 		}
 	}
@@ -169,10 +172,11 @@ func HandleGoogleCallback(w http.ResponseWriter, r *http.Request) {
 	session, _ := store.Get(r, "session-name")
 	session.Values["user"] = user
 	if err := session.Save(r, w); err != nil {
-		log.Printf("Error saving session: %s", err.Error())
-		http.Error(w, "Error saving session", http.StatusInternalServerError)
+		log.Printf("Ошибка при сохранении сессии: %s", err.Error())
+		http.Error(w, "Ошибка сохранения сессии", http.StatusInternalServerError)
 		return
 	}
 
+	// Перенаправляем пользователя на защищенную страницу
 	http.Redirect(w, r, "/welcome", http.StatusTemporaryRedirect)
 }

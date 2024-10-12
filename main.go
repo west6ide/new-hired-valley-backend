@@ -52,11 +52,11 @@ func main() {
 
 	http.HandleFunc("/register", authentication.Register)
 	http.HandleFunc("/login", authentication.Login)
-	http.HandleFunc("/api/profile", authentication.GetProfile)
-	http.HandleFunc("/api/logout", authentication.Logout)
+	http.HandleFunc("/profile", authentication.GetProfile)
+	http.HandleFunc("/logout", authentication.Logout)
 
-	http.HandleFunc("/api/profile/update", authentication.UpdateProfile)
-	http.HandleFunc("/api/users/search", authentication.SearchUsers)
+	http.HandleFunc("/profile/update", authentication.UpdateProfile)
+	http.HandleFunc("/users/search", authentication.SearchUsers)
 
 	// Запускаем сервер
 	log.Printf("Сервер запущен на порту %s", port)

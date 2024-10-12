@@ -55,6 +55,9 @@ func main() {
 	http.HandleFunc("/api/profile", authentication.GetProfile)
 	http.HandleFunc("/api/logout", authentication.Logout)
 
+	http.HandleFunc("/api/profile/update", authentication.UpdateProfile)
+	http.HandleFunc("/api/users/search", authentication.SearchUsers)
+
 	// Запускаем сервер
 	log.Printf("Сервер запущен на порту %s", port)
 	err = http.ListenAndServe(":"+port, nil)

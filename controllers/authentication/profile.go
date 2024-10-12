@@ -42,54 +42,85 @@ func UpdateProfile(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Начало транзакции
+	tx := config.DB.Begin()
+
 	// Обработка добавления навыков
+	var updatedSkills []models.Skill
 	for _, skill := range updatedProfile.Skills {
 		var existingSkill models.Skill
-		if err := config.DB.Where("name = ?", skill.Name).First(&existingSkill).Error; err != nil {
+		if err := tx.Where("name = ?", skill.Name).First(&existingSkill).Error; err != nil {
 			if err == gorm.ErrRecordNotFound {
 				// Если навык не найден, создаем его
 				newSkill := models.Skill{Name: skill.Name}
-				config.DB.Create(&newSkill)
-				user.Skills = append(user.Skills, newSkill)
+				if err := tx.Create(&newSkill).Error; err != nil {
+					tx.Rollback()
+					http.Error(w, "Error creating new skill", http.StatusInternalServerError)
+					return
+				}
+				updatedSkills = append(updatedSkills, newSkill)
 			} else {
-				http.Error(w, "Error updating skills", http.StatusInternalServerError)
+				tx.Rollback()
+				http.Error(w, "Error finding skill", http.StatusInternalServerError)
 				return
 			}
 		} else {
-			// Если навык найден, добавляем его к пользователю
-			user.Skills = append(user.Skills, existingSkill)
+			// Добавляем уже существующий навык в список
+			updatedSkills = append(updatedSkills, existingSkill)
 		}
+	}
+	// Обновляем навыки пользователя
+	if err := tx.Model(&user).Association("Skills").Replace(updatedSkills); err != nil {
+		tx.Rollback()
+		http.Error(w, "Error updating skills", http.StatusInternalServerError)
+		return
 	}
 
 	// Обработка добавления интересов
+	var updatedInterests []models.Interest
 	for _, interest := range updatedProfile.Interests {
 		var existingInterest models.Interest
-		if err := config.DB.Where("name = ?", interest.Name).First(&existingInterest).Error; err != nil {
+		if err := tx.Where("name = ?", interest.Name).First(&existingInterest).Error; err != nil {
 			if err == gorm.ErrRecordNotFound {
 				// Если интерес не найден, создаем его
 				newInterest := models.Interest{Name: interest.Name}
-				config.DB.Create(&newInterest)
-				user.Interests = append(user.Interests, newInterest)
+				if err := tx.Create(&newInterest).Error; err != nil {
+					tx.Rollback()
+					http.Error(w, "Error creating new interest", http.StatusInternalServerError)
+					return
+				}
+				updatedInterests = append(updatedInterests, newInterest)
 			} else {
-				http.Error(w, "Error updating interests", http.StatusInternalServerError)
+				tx.Rollback()
+				http.Error(w, "Error finding interest", http.StatusInternalServerError)
 				return
 			}
 		} else {
-			// Если интерес найден, добавляем его к пользователю
-			user.Interests = append(user.Interests, existingInterest)
+			// Добавляем уже существующий интерес в список
+			updatedInterests = append(updatedInterests, existingInterest)
 		}
 	}
+	// Обновляем интересы пользователя
+	if err := tx.Model(&user).Association("Interests").Replace(updatedInterests); err != nil {
+		tx.Rollback()
+		http.Error(w, "Error updating interests", http.StatusInternalServerError)
+		return
+	}
 
-	// Обновление остальных данных профиля
+	// Обновляем остальные данные профиля
 	user.Position = updatedProfile.Position
 	user.City = updatedProfile.City
 	user.Income = updatedProfile.Income
 	user.Visibility = updatedProfile.Visibility
 
-	if err := config.DB.Save(&user).Error; err != nil {
+	if err := tx.Save(&user).Error; err != nil {
+		tx.Rollback()
 		http.Error(w, "Error updating profile", http.StatusInternalServerError)
 		return
 	}
+
+	// Коммит транзакции
+	tx.Commit()
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(user)

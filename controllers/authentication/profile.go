@@ -2,37 +2,36 @@ package authentication
 
 import (
 	"encoding/json"
+	"net/http"
+	"strings"
+
 	"github.com/dgrijalva/jwt-go"
 	"hired-valley-backend/config"
 	"hired-valley-backend/models"
-	"net/http"
-	"strings"
 )
 
-// Обработчик для обновления профиля
 func UpdateProfile(w http.ResponseWriter, r *http.Request) {
-	// Извлекаем токен из заголовка Authorization
+	// Извлечение токена из заголовка Authorization
 	authHeader := r.Header.Get("Authorization")
 	if authHeader == "" {
 		http.Error(w, "Authorization header required", http.StatusUnauthorized)
 		return
 	}
 
-	// Убираем "Bearer " из начала заголовка
+	// Убираем "Bearer " из заголовка
 	tokenString := strings.TrimPrefix(authHeader, "Bearer ")
 
-	// Проверяем и декодируем токен
+	// Проверка и декодирование токена
 	claims := &Claims{}
 	token, err := jwt.ParseWithClaims(tokenString, claims, func(token *jwt.Token) (interface{}, error) {
 		return jwtKey, nil
 	})
-
 	if err != nil || !token.Valid {
 		http.Error(w, "Invalid token", http.StatusUnauthorized)
 		return
 	}
 
-	// Извлекаем email пользователя из токена
+	// Извлечение email пользователя из токена
 	email := claims.Email
 
 	// Поиск пользователя по email в базе данных
@@ -42,14 +41,14 @@ func UpdateProfile(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Декодируем тело запроса и обновляем профиль пользователя
+	// Декодирование тела запроса для обновления профиля
 	var updatedProfile models.User
 	if err := json.NewDecoder(r.Body).Decode(&updatedProfile); err != nil {
 		http.Error(w, "Invalid input", http.StatusBadRequest)
 		return
 	}
 
-	// Обновляем данные профиля
+	// Обновление полей пользователя
 	user.Position = updatedProfile.Position
 	user.City = updatedProfile.City
 	user.Income = updatedProfile.Income
@@ -57,13 +56,13 @@ func UpdateProfile(w http.ResponseWriter, r *http.Request) {
 	user.Interests = updatedProfile.Interests
 	user.Visibility = updatedProfile.Visibility
 
-	// Сохраняем изменения в базе данных
+	// Сохранение изменений в базе данных
 	if err := config.DB.Save(&user).Error; err != nil {
 		http.Error(w, "Error updating profile", http.StatusInternalServerError)
 		return
 	}
 
-	// Возвращаем обновлённые данные профиля
+	// Возвращаем обновлённый профиль
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(user)
 }

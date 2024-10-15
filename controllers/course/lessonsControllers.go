@@ -1,7 +1,7 @@
 package course
 
 import (
-	"github.com/gin-gonic/gin"
+	"encoding/json"
 	"hired-valley-backend/config"
 	"hired-valley-backend/models/courses"
 	"net/http"
@@ -9,40 +9,55 @@ import (
 )
 
 // Листинг уроков курса
-func ListLessons(c *gin.Context) {
-	courseID := c.Param("id")
-	var lessons []courses.Lesson
-	if err := config.DB.Where("course_id = ?", courseID).Find(&lessons).Error; err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to list lessons"})
+func ListLessons(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
 
-	c.JSON(http.StatusOK, lessons)
+	courseIDStr := r.URL.Query().Get("course_id")
+	courseID, err := strconv.ParseUint(courseIDStr, 10, 32)
+	if err != nil {
+		http.Error(w, "Invalid course ID", http.StatusBadRequest)
+		return
+	}
+
+	var lessons []courses.Lesson
+	if err := config.DB.Where("course_id = ?", uint(courseID)).Find(&lessons).Error; err != nil {
+		http.Error(w, "Failed to list lessons", http.StatusInternalServerError)
+		return
+	}
+
+	w.WriteHeader(http.StatusOK)
+	json.NewEncoder(w).Encode(lessons)
 }
 
 // Создание урока
-func CreateLesson(c *gin.Context) {
-	courseIDStr := c.Param("id")
+func CreateLesson(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
 
-	// Преобразуем courseID из строки в uint
+	courseIDStr := r.URL.Query().Get("course_id")
 	courseID, err := strconv.ParseUint(courseIDStr, 10, 32)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid course ID"})
+		http.Error(w, "Invalid course ID", http.StatusBadRequest)
 		return
 	}
 
 	var lesson courses.Lesson
-	if err := c.BindJSON(&lesson); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid input"})
+	if err := json.NewDecoder(r.Body).Decode(&lesson); err != nil {
+		http.Error(w, "Invalid input", http.StatusBadRequest)
 		return
 	}
-
-	lesson.CourseID = uint(courseID) // Преобразуем к uint перед присвоением
+	lesson.CourseID = uint(courseID)
 
 	if err := config.DB.Create(&lesson).Error; err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create lesson"})
+		http.Error(w, "Failed to create lesson", http.StatusInternalServerError)
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"message": "Lesson created"})
+	w.WriteHeader(http.StatusOK)
+	json.NewEncoder(w).Encode(map[string]string{"message": "Lesson created"})
 }

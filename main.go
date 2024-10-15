@@ -25,6 +25,8 @@ func main() {
 	// Выполняем миграцию базы данных
 	err = config.DB.AutoMigrate(
 		&models.User{},
+		&models.GoogleUser{},
+		&models.LinkedInUser{},
 	)
 	if err != nil {
 		log.Fatalf("Ошибка миграции базы данных: %v", err)

@@ -3,12 +3,12 @@ package authentication
 import (
 	"encoding/json"
 	"gorm.io/gorm"
+	"hired-valley-backend/models/users"
 	"net/http"
 	"strings"
 
 	"github.com/dgrijalva/jwt-go"
 	"hired-valley-backend/config"
-	"hired-valley-backend/models"
 )
 
 func UpdateProfile(w http.ResponseWriter, r *http.Request) {
@@ -30,13 +30,13 @@ func UpdateProfile(w http.ResponseWriter, r *http.Request) {
 
 	email := claims.Email
 
-	var user models.User
+	var user users.User
 	if err := config.DB.Where("email = ?", email).First(&user).Error; err != nil {
 		http.Error(w, "User not found", http.StatusNotFound)
 		return
 	}
 
-	var updatedProfile models.User
+	var updatedProfile users.User
 	if err := json.NewDecoder(r.Body).Decode(&updatedProfile); err != nil {
 		http.Error(w, "Invalid input", http.StatusBadRequest)
 		return
@@ -46,13 +46,13 @@ func UpdateProfile(w http.ResponseWriter, r *http.Request) {
 	tx := config.DB.Begin()
 
 	// Обработка добавления навыков
-	var updatedSkills []models.Skill
+	var updatedSkills []users.Skill
 	for _, skill := range updatedProfile.Skills {
-		var existingSkill models.Skill
+		var existingSkill users.Skill
 		if err := tx.Where("name = ?", skill.Name).First(&existingSkill).Error; err != nil {
 			if err == gorm.ErrRecordNotFound {
 				// Если навык не найден, создаем его
-				newSkill := models.Skill{Name: skill.Name}
+				newSkill := users.Skill{Name: skill.Name}
 				if err := tx.Create(&newSkill).Error; err != nil {
 					tx.Rollback()
 					http.Error(w, "Error creating new skill", http.StatusInternalServerError)
@@ -77,13 +77,13 @@ func UpdateProfile(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Обработка добавления интересов
-	var updatedInterests []models.Interest
+	var updatedInterests []users.Interest
 	for _, interest := range updatedProfile.Interests {
-		var existingInterest models.Interest
+		var existingInterest users.Interest
 		if err := tx.Where("name = ?", interest.Name).First(&existingInterest).Error; err != nil {
 			if err == gorm.ErrRecordNotFound {
 				// Если интерес не найден, создаем его
-				newInterest := models.Interest{Name: interest.Name}
+				newInterest := users.Interest{Name: interest.Name}
 				if err := tx.Create(&newInterest).Error; err != nil {
 					tx.Rollback()
 					http.Error(w, "Error creating new interest", http.StatusInternalServerError)

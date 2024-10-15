@@ -5,7 +5,7 @@ package authentication
 import (
 	"encoding/json"
 	"hired-valley-backend/config"
-	"hired-valley-backend/models"
+	"hired-valley-backend/models/users"
 	"net/http"
 )
 
@@ -15,7 +15,7 @@ func SearchUsers(w http.ResponseWriter, r *http.Request) {
 	interest := r.URL.Query().Get("interest")
 	position := r.URL.Query().Get("position")
 
-	var users []models.User
+	var users []users.User
 	query := config.DB
 
 	if skill != "" {

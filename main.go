@@ -4,7 +4,9 @@ import (
 	"fmt"
 	"hired-valley-backend/config"
 	"hired-valley-backend/controllers/authentication"
-	"hired-valley-backend/models"
+	"hired-valley-backend/controllers/course"
+	"hired-valley-backend/models/courses"
+	"hired-valley-backend/models/users"
 	"log"
 	"net/http"
 	"os"
@@ -24,9 +26,11 @@ func main() {
 
 	// Выполняем миграцию базы данных
 	err = config.DB.AutoMigrate(
-		&models.User{},
-		&models.GoogleUser{},
-		&models.LinkedInUser{},
+		&users.User{},
+		&users.GoogleUser{},
+		&users.LinkedInUser{},
+		&courses.Course{},
+		&courses.Lesson{},
 	)
 	if err != nil {
 		log.Fatalf("Ошибка миграции базы данных: %v", err)
@@ -60,6 +64,12 @@ func main() {
 	http.HandleFunc("/profile/update", authentication.UpdateProfile)
 	http.HandleFunc("/users/search", authentication.SearchUsers)
 
+	http.HandleFunc("/list/courses", course.ListCourses)
+	http.HandleFunc("/create/courses", course.CreateCourse)
+	http.HandleFunc("/upload/video", course.UploadVideo)
+	http.HandleFunc("/list/courses/:id/lessons", course.ListLessons)
+	http.HandleFunc("/create/courses/:id/lessons", course.CreateLesson)
+
 	// Запускаем сервер
 	log.Printf("Сервер запущен на порту %s", port)
 	err = http.ListenAndServe(":"+port, nil)
@@ -74,7 +84,7 @@ func handleHome(w http.ResponseWriter, r *http.Request) {
 
 	if user != nil {
 		switch usr := user.(type) {
-		case models.GoogleUser:
+		case users.GoogleUser:
 			html := fmt.Sprintf(`<html><body>
 				<p>Добро пожаловать, %s!</p>
 				<a href="/logout">Выйти</a><br>
@@ -83,7 +93,7 @@ func handleHome(w http.ResponseWriter, r *http.Request) {
 				</form>
 			</body></html>`, usr.FirstName)
 			fmt.Fprint(w, html)
-		case models.LinkedInUser:
+		case users.LinkedInUser:
 			html := fmt.Sprintf(`<html><body>
 				<p>Добро пожаловать, %s!</p>
 				<a href="/logout">Выйти</a><br>

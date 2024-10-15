@@ -6,7 +6,7 @@ import (
 	"github.com/dgrijalva/jwt-go"
 	"golang.org/x/crypto/bcrypt"
 	"hired-valley-backend/config"
-	"hired-valley-backend/models"
+	"hired-valley-backend/models/users"
 	"log"
 	"net/http"
 	"os"
@@ -23,7 +23,7 @@ type Claims struct {
 
 // Register: Обычная регистрация с паролем
 func Register(w http.ResponseWriter, r *http.Request) {
-	var user models.User
+	var user users.User
 	if err := json.NewDecoder(r.Body).Decode(&user); err != nil {
 		http.Error(w, "Invalid input", http.StatusBadRequest)
 		return
@@ -32,7 +32,7 @@ func Register(w http.ResponseWriter, r *http.Request) {
 	log.Printf("Попытка регистрации пользователя: %+v", user)
 
 	// Проверяем, существует ли пользователь с таким email и обычной авторизацией (provider = local)
-	var existingUser models.User
+	var existingUser users.User
 	if err := config.DB.Where("email = ? AND provider = ?", user.Email, "local").First(&existingUser).Error; err == nil {
 		http.Error(w, "Email already registered", http.StatusConflict)
 		return
@@ -90,13 +90,13 @@ func Register(w http.ResponseWriter, r *http.Request) {
 
 // Login: Вход с паролем и генерация JWT
 func Login(w http.ResponseWriter, r *http.Request) {
-	var inputUser models.User
+	var inputUser users.User
 	if err := json.NewDecoder(r.Body).Decode(&inputUser); err != nil {
 		http.Error(w, "Invalid input", http.StatusBadRequest)
 		return
 	}
 
-	var user models.User
+	var user users.User
 	// Поиск пользователя по email и провайдеру "local"
 	if err := config.DB.Where("email = ? AND provider = ?", inputUser.Email, "local").First(&user).Error; err != nil {
 		http.Error(w, "User not found", http.StatusUnauthorized)
@@ -159,7 +159,7 @@ func GetProfile(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Поиск пользователя по email из токена и провайдеру "local"
-	var user models.User
+	var user users.User
 	if err := config.DB.Where("email = ? AND provider = ?", claims.Email, "local").First(&user).Error; err != nil {
 		http.Error(w, "User not found", http.StatusUnauthorized)
 		return

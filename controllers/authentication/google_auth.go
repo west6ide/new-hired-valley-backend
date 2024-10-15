@@ -7,7 +7,7 @@ import (
 	"golang.org/x/oauth2/google"
 	"gorm.io/gorm"
 	"hired-valley-backend/config"
-	"hired-valley-backend/models"
+	"hired-valley-backend/models/users"
 	"io/ioutil"
 	"log"
 	"net/http"
@@ -117,12 +117,12 @@ func HandleGoogleCallback(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Проверка, существует ли пользователь с таким email
-	var user models.User
+	var user users.User
 	if err := config.DB.Where("email = ?", email).First(&user).Error; err != nil {
 		// Если пользователь не найден, создаем нового
 		if err == gorm.ErrRecordNotFound {
 			log.Printf("Пользователь с email %s не найден, создаем нового", email)
-			user = models.User{
+			user = users.User{
 				Email:       email,
 				Name:        firstName + " " + lastName,
 				Provider:    "google",
@@ -141,12 +141,12 @@ func HandleGoogleCallback(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Проверка в таблице GoogleUser
-	var googleUser models.GoogleUser
+	var googleUser users.GoogleUser
 	if err := config.DB.Where("google_id = ?", googleID).First(&googleUser).Error; err != nil {
 		// Если GoogleUser не найден, создаем нового
 		if err == gorm.ErrRecordNotFound {
 			log.Printf("GoogleUser с ID %s не найден, создаем нового", googleID)
-			googleUser = models.GoogleUser{
+			googleUser = users.GoogleUser{
 				UserID:      user.ID,
 				GoogleID:    googleID,
 				Email:       email,

@@ -25,7 +25,7 @@ func ListCourses(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(courses)
 }
 
-func createCourse(w http.ResponseWriter, r *http.Request) {
+func CreateCourse(w http.ResponseWriter, r *http.Request) {
 	var course courses.Course
 	err := json.NewDecoder(r.Body).Decode(&course)
 	if err != nil {

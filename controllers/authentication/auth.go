@@ -18,6 +18,7 @@ var jwtKey = []byte(os.Getenv("JWT_SECRET")) // Инициализация jwtKe
 
 type Claims struct {
 	Email string `json:"email"`
+	Role  string `json:"role"` // Добавляем поле Role
 	jwt.StandardClaims
 }
 

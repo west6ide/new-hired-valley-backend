@@ -113,6 +113,24 @@ func UpdateProfile(w http.ResponseWriter, r *http.Request) {
 	user.Income = updatedProfile.Income
 	user.Visibility = updatedProfile.Visibility
 
+	// Проверка и изменение роли (только для администраторов)
+	if claims.Role == "admin" {
+		if updatedProfile.Role == "user" || updatedProfile.Role == "instructor" || updatedProfile.Role == "admin" {
+			user.Role = updatedProfile.Role
+		} else {
+			tx.Rollback()
+			http.Error(w, "Invalid role", http.StatusBadRequest)
+			return
+		}
+	} else {
+		// Если текущий пользователь не администратор, запрещаем изменение роли
+		if updatedProfile.Role != "" && updatedProfile.Role != user.Role {
+			tx.Rollback()
+			http.Error(w, "Only admin can change role", http.StatusForbidden)
+			return
+		}
+	}
+
 	if err := tx.Save(&user).Error; err != nil {
 		tx.Rollback()
 		http.Error(w, "Error updating profile", http.StatusInternalServerError)

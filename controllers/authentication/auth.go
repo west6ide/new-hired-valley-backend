@@ -50,7 +50,7 @@ func Register(w http.ResponseWriter, r *http.Request) {
 
 	// Если роль не указана, присваиваем роль по умолчанию
 	if user.Role == "" {
-		user.Role = "user" // Роль по умолчанию
+		user.Role = "admin" // Роль по умолчанию
 	}
 
 	// Создание JWT токена

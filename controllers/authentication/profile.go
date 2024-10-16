@@ -21,7 +21,7 @@ func UpdateProfile(w http.ResponseWriter, r *http.Request) {
 	tokenString := strings.TrimPrefix(authHeader, "Bearer ")
 	claims := &Claims{}
 	token, err := jwt.ParseWithClaims(tokenString, claims, func(token *jwt.Token) (interface{}, error) {
-		return jwtKey, nil
+		return JwtKey, nil
 	})
 	if err != nil || !token.Valid {
 		http.Error(w, "Invalid token", http.StatusUnauthorized)

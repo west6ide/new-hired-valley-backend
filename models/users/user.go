@@ -32,7 +32,7 @@ type User struct {
 	Position     string     `json:"position"`
 	City         string     `json:"city"`
 	Income       int        `json:"income"`
-	Role         string     `json:"role" gorm:"not null;default:admin"`
+	Role         string     `json:"role" gorm:"not null;default:user"`
 	Skills       []Skill    `json:"skills" gorm:"many2many:user_skills"`
 	Interests    []Interest `json:"interests" gorm:"many2many:user_interests"`
 	Visibility   string     `json:"visibility" gorm:"default:'public'"` // Контроль видимости профиля

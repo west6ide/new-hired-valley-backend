@@ -14,11 +14,12 @@ import (
 	"time"
 )
 
-var jwtKey = []byte(os.Getenv("JWT_SECRET")) // Инициализация jwtKey
+var JwtKey = []byte(os.Getenv("JWT_SECRET")) // Инициализация jwtKey
 
 type Claims struct {
-	Email string `json:"email"`
-	Role  string `json:"role"` // Добавляем поле Role
+	Email  string `json:"email"`
+	Role   string `json:"role"`
+	UserID uint   `gorm:"primaryKey"` // Добавляем поле Role
 	jwt.StandardClaims
 }
 
@@ -65,7 +66,7 @@ func Register(w http.ResponseWriter, r *http.Request) {
 	}
 
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
-	tokenString, err := token.SignedString(jwtKey)
+	tokenString, err := token.SignedString(JwtKey)
 	if err != nil {
 		http.Error(w, "Error generating token", http.StatusInternalServerError)
 		return
@@ -122,7 +123,7 @@ func Login(w http.ResponseWriter, r *http.Request) {
 	}
 
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
-	tokenString, err := token.SignedString(jwtKey)
+	tokenString, err := token.SignedString(JwtKey)
 	if err != nil {
 		http.Error(w, "Error generating token", http.StatusInternalServerError)
 		return
@@ -153,7 +154,7 @@ func GetProfile(w http.ResponseWriter, r *http.Request) {
 	claims := &Claims{}
 
 	token, err := jwt.ParseWithClaims(tokenString, claims, func(token *jwt.Token) (interface{}, error) {
-		return jwtKey, nil
+		return JwtKey, nil
 	})
 
 	if err != nil || !token.Valid {

@@ -25,26 +25,27 @@ func ListCourses(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(courses)
 }
 
-// Создание курса
-func CreateCourse(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodPost {
-		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
-		return
-	}
-
+func createCourse(w http.ResponseWriter, r *http.Request) {
 	var course courses.Course
-	if err := json.NewDecoder(r.Body).Decode(&course); err != nil {
+	err := json.NewDecoder(r.Body).Decode(&course)
+	if err != nil {
 		http.Error(w, "Invalid input", http.StatusBadRequest)
 		return
 	}
 
+	// Проверка обязательных полей
+	if course.Title == "" || course.InstructorID == 0 {
+		http.Error(w, "Missing required fields", http.StatusBadRequest)
+		return
+	}
+
+	// Создание курса в базе данных
 	if err := config.DB.Create(&course).Error; err != nil {
 		http.Error(w, "Failed to create course", http.StatusInternalServerError)
 		return
 	}
 
-	w.WriteHeader(http.StatusOK)
-	json.NewEncoder(w).Encode(map[string]string{"message": "Course created"})
+	json.NewEncoder(w).Encode(course)
 }
 
 // Загрузка видео

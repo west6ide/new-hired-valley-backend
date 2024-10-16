@@ -117,7 +117,9 @@ func Login(w http.ResponseWriter, r *http.Request) {
 	// Создание JWT токена
 	expirationTime := time.Now().Add(24 * time.Hour)
 	claims := &Claims{
-		Email: user.Email,
+		UserID: user.ID, // Добавляем UserID
+		Email:  user.Email,
+		Role:   user.Role, // Не забываем добавить роль
 		StandardClaims: jwt.StandardClaims{
 			ExpiresAt: expirationTime.Unix(),
 		},

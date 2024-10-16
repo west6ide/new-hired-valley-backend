@@ -45,7 +45,6 @@ func CreateCourse(w http.ResponseWriter, r *http.Request) {
 	token, err := jwt.ParseWithClaims(tokenString, claims, func(token *jwt.Token) (interface{}, error) {
 		return []byte(authentication.JwtKey), nil
 	})
-
 	if err != nil || !token.Valid {
 		http.Error(w, "Invalid token", http.StatusUnauthorized)
 		return

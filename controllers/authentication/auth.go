@@ -22,7 +22,7 @@ type Claims struct {
 	jwt.StandardClaims
 }
 
-// Register: Обычная регистрация с паролем
+// Register: Обычная регистрация с паролем и выбором роли
 func Register(w http.ResponseWriter, r *http.Request) {
 	var user users.User
 	if err := json.NewDecoder(r.Body).Decode(&user); err != nil {
@@ -48,15 +48,17 @@ func Register(w http.ResponseWriter, r *http.Request) {
 	user.Password = string(hashedPassword)
 	user.Provider = "local" // Устанавливаем провайдер как "local" для обычной регистрации
 
-	// Если роль не указана, присваиваем роль по умолчанию
-	if user.Role == "" {
-		user.Role = "admin" // Роль по умолчанию
+	// Валидация роли: только 'user' или 'instructor'
+	if user.Role != "user" && user.Role != "instructor" {
+		http.Error(w, "Invalid role. Allowed roles: user, instructor", http.StatusBadRequest)
+		return
 	}
 
 	// Создание JWT токена
 	expirationTime := time.Now().Add(24 * time.Hour)
 	claims := &Claims{
 		Email: user.Email,
+		Role:  user.Role,
 		StandardClaims: jwt.StandardClaims{
 			ExpiresAt: expirationTime.Unix(),
 		},

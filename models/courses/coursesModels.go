@@ -2,16 +2,18 @@ package courses
 
 import (
 	"gorm.io/gorm"
+	"hired-valley-backend/models/users"
 	"time"
 )
 
 type Course struct {
-	ID           uint      `gorm:"primaryKey"`
-	Title        string    `gorm:"not null"`
-	Description  string    `gorm:"type:text"`
-	InstructorID uint      `gorm:"not null"`
-	CreatedAt    time.Time `gorm:"default:current_timestamp"`
+	ID           uint       `gorm:"primaryKey"`
+	Title        string     `json:"title" gorm:"not null"`
+	Description  string     `json:"description" gorm:"type:text"`
+	InstructorID uint       `json:"instructor_id" gorm:"not null"`    // Внешний ключ на инструктора
+	Instructor   users.User `json:"-" gorm:"foreignKey:InstructorID"` // Связь с таблицей users
+	CreatedAt    time.Time  `gorm:"default:current_timestamp"`
 	UpdatedAt    time.Time
 	DeletedAt    gorm.DeletedAt `gorm:"index"`
-	Lessons      []Lesson       `gorm:"foreignKey:CourseID"`
+	Lessons      []Lesson       `gorm:"foreignKey:CourseID"` // Связь с уроками
 }

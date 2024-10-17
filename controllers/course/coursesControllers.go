@@ -28,7 +28,7 @@ func ListCourses(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(courses)
 }
 
-// CreateCourse функция для создания курса, доступна только для пользователей с ролью instructor
+// Функция для создания курса, доступна только для пользователей с ролью instructor
 func CreateCourse(w http.ResponseWriter, r *http.Request) {
 	// Извлекаем токен из заголовка Authorization
 	authHeader := r.Header.Get("Authorization")
@@ -45,6 +45,7 @@ func CreateCourse(w http.ResponseWriter, r *http.Request) {
 	token, err := jwt.ParseWithClaims(tokenString, claims, func(token *jwt.Token) (interface{}, error) {
 		return []byte(authentication.JwtKey), nil
 	})
+
 	if err != nil || !token.Valid {
 		http.Error(w, "Invalid token", http.StatusUnauthorized)
 		return

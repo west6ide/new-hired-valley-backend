@@ -32,13 +32,9 @@ func ListLessons(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(lessons)
 }
 
-// Создание урока
-func CreateLesson(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodPost {
-		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
-		return
-	}
-
+// Функция для создания одного или нескольких уроков для конкретного курса
+func CreateLessons(w http.ResponseWriter, r *http.Request) {
+	// Извлекаем ID курса из URL
 	courseIDStr := r.URL.Query().Get("course_id")
 	courseID, err := strconv.ParseUint(courseIDStr, 10, 32)
 	if err != nil {
@@ -46,18 +42,25 @@ func CreateLesson(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var lesson courses.Lesson
-	if err := json.NewDecoder(r.Body).Decode(&lesson); err != nil {
+	// Декодируем массив уроков из тела запроса
+	var lessons []courses.Lesson
+	if err := json.NewDecoder(r.Body).Decode(&lessons); err != nil {
 		http.Error(w, "Invalid input", http.StatusBadRequest)
 		return
 	}
-	lesson.CourseID = uint(courseID)
 
-	if err := config.DB.Create(&lesson).Error; err != nil {
-		http.Error(w, "Failed to create lesson", http.StatusInternalServerError)
+	// Привязываем все уроки к курсу
+	for i := range lessons {
+		lessons[i].CourseID = uint(courseID)
+	}
+
+	// Сохраняем уроки в базе данных
+	if err := config.DB.Create(&lessons).Error; err != nil {
+		http.Error(w, "Failed to create lessons", http.StatusInternalServerError)
 		return
 	}
 
-	w.WriteHeader(http.StatusOK)
-	json.NewEncoder(w).Encode(map[string]string{"message": "Lesson created"})
+	// Возвращаем успешный ответ с данными уроков
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(lessons)
 }

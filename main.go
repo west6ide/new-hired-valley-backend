@@ -68,7 +68,7 @@ func main() {
 	http.HandleFunc("/create/courses", course.CreateCourse)
 	http.HandleFunc("/upload/video", course.UploadVideo)
 	http.HandleFunc("/list/courses/:id/lessons", course.ListLessons)
-	http.HandleFunc("/create/courses/:id/lessons", course.CreateLesson)
+	http.HandleFunc("/create/courses/:id/lessons", course.CreateLessons)
 
 	// Запускаем сервер
 	log.Printf("Сервер запущен на порту %s", port)

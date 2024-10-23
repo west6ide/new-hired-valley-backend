@@ -6,6 +6,7 @@ import (
 	"hired-valley-backend/config"
 	"hired-valley-backend/controllers/authentication"
 	"hired-valley-backend/models/courses"
+	"mime/multipart"
 	"net/http"
 	"strconv"
 	"strings"
@@ -95,4 +96,34 @@ func CreateLesson(w http.ResponseWriter, r *http.Request) {
 	// Возвращаем успешный ответ с данными урока
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(lesson)
+}
+
+// Загрузка видео
+func UploadVideo(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	file, _, err := r.FormFile("video")
+	if err != nil {
+		http.Error(w, "Failed to upload video", http.StatusBadRequest)
+		return
+	}
+	defer file.Close()
+
+	vimeoLink, err := uploadVideoToVimeo(file)
+	if err != nil {
+		http.Error(w, "Failed to upload video to Vimeo", http.StatusInternalServerError)
+		return
+	}
+
+	w.WriteHeader(http.StatusOK)
+	json.NewEncoder(w).Encode(map[string]string{"vimeo_link": vimeoLink})
+}
+
+// Загрузка видео на Vimeo (заглушка)
+func uploadVideoToVimeo(file multipart.File) (string, error) {
+	// Логика для загрузки видео на Vimeo через API
+	return "https://vimeo.com/video_id", nil
 }

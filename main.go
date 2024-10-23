@@ -70,6 +70,8 @@ func main() {
 	http.HandleFunc("/list/lessons", course.ListLessons)
 	http.HandleFunc("/create/lessons", course.CreateLesson)
 
+	http.HandleFunc("/api/career-strategy", course.GenerateCareerStrategy)
+
 	// Запускаем сервер
 	log.Printf("Сервер запущен на порту %s", port)
 	err = http.ListenAndServe(":"+port, nil)

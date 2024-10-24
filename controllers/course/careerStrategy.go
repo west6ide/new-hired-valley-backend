@@ -25,19 +25,27 @@ type CareerStrategyResponse struct {
 
 // Вызов OpenAI API для генерации карьерной стратегии
 func callOpenAICareerStrategy(goals string, income int) (string, error) {
-	apiKey := os.Getenv("OPENAI_API_KEY") // Ensure that the OpenAI API key is set in the environment variables
+	apiKey := os.Getenv("OPENAI_API_KEY") // Убедитесь, что API ключ установлен в переменных окружения
 	if apiKey == "" {
 		return "", fmt.Errorf("OpenAI API key is not set")
 	}
 
-	url := "https://api.openai.com/v1/completions"
-	payload := fmt.Sprintf(`{
-		"model": "text-davinci-003",
-		"prompt": "Generate a career strategy for a user whose goal is %s and wants to earn %d USD annually.",
-		"max_tokens": 500
-	}`, goals, income)
+	url := "https://api.openai.com/v1/chat/completions"
+	data := map[string]interface{}{
+		"model": "gpt-3.5-turbo", // Используем актуальную модель
+		"messages": []map[string]string{
+			{"role": "system", "content": "You are a career assistant."},
+			{"role": "user", "content": fmt.Sprintf("Create a career strategy for someone whose goal is %s and who wants to earn %d USD annually.", goals, income)},
+		},
+		"max_tokens": 500,
+	}
 
-	req, err := http.NewRequest("POST", url, bytes.NewBuffer([]byte(payload)))
+	jsonData, err := json.Marshal(data)
+	if err != nil {
+		return "", err
+	}
+
+	req, err := http.NewRequest("POST", url, bytes.NewBuffer(jsonData))
 	if err != nil {
 		return "", err
 	}
@@ -57,7 +65,20 @@ func callOpenAICareerStrategy(goals string, income int) (string, error) {
 		return "", err
 	}
 
-	return string(body), nil
+	// Парсим ответ от OpenAI
+	var result map[string]interface{}
+	if err := json.Unmarshal(body, &result); err != nil {
+		return "", err
+	}
+
+	// Извлекаем ответ AI
+	if choices, ok := result["choices"].([]interface{}); ok && len(choices) > 0 {
+		if message, ok := choices[0].(map[string]interface{})["message"].(map[string]interface{}); ok {
+			return message["content"].(string), nil
+		}
+	}
+
+	return "", fmt.Errorf("Invalid response from OpenAI")
 }
 
 // AI генерация карьерной стратегии с OpenAI

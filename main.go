@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"hired-valley-backend/config"
+	"hired-valley-backend/controllers"
 	"hired-valley-backend/controllers/authentication"
 	"hired-valley-backend/controllers/course"
 	"hired-valley-backend/models/courses"
@@ -70,7 +71,7 @@ func main() {
 	http.HandleFunc("/list/lessons", course.ListLessons)
 	http.HandleFunc("/create/lessons", course.CreateLesson)
 
-	http.HandleFunc("/api/career-strategy", course.GenerateCareerStrategy)
+	http.HandleFunc("/career-strategy", controllers.GenerateCareerStrategy)
 
 	// Запускаем сервер
 	log.Printf("Сервер запущен на порту %s", port)

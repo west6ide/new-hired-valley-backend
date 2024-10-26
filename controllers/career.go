@@ -30,12 +30,20 @@ func GenerateCareerStrategy(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Retrieve the OpenAI API key from the environment variables
 	apiKey := os.Getenv("OPENAI_API_KEY")
+	if apiKey == "" {
+		http.Error(w, "OpenAI API key not set", http.StatusInternalServerError)
+		return
+	}
+
 	client := openai.NewClient(apiKey)
 	ctx := context.Background()
 
+	// Define the prompt for OpenAI
 	prompt := fmt.Sprintf("Create a career strategy for someone aiming to achieve %s income with current skills in %s. Goals: %s", req.DesiredIncome, req.CurrentSkills, req.Goals)
 
+	// Make the request to OpenAI API
 	response, err := client.CreateChatCompletion(ctx, openai.ChatCompletionRequest{
 		Model: openai.GPT3Dot5Turbo,
 		Messages: []openai.ChatCompletionMessage{
@@ -47,11 +55,12 @@ func GenerateCareerStrategy(w http.ResponseWriter, r *http.Request) {
 	})
 
 	if err != nil {
+		fmt.Printf("OpenAI API error: %v\n", err) // Log the error details
 		http.Error(w, "Failed to generate strategy", http.StatusInternalServerError)
 		return
 	}
 
-	// Prepare response
+	// Extract the response from OpenAI
 	strategy := response.Choices[0].Message.Content
 	res := CareerStrategyResponse{Strategy: strategy}
 	w.Header().Set("Content-Type", "application/json")

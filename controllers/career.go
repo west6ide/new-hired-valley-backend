@@ -33,6 +33,7 @@ func GenerateCareerStrategy(w http.ResponseWriter, r *http.Request) {
 	// Retrieve the OpenAI API key from the environment variables
 	apiKey := os.Getenv("OPENAI_API_KEY")
 	if apiKey == "" {
+		fmt.Println("Error: OpenAI API key not set")
 		http.Error(w, "OpenAI API key not set", http.StatusInternalServerError)
 		return
 	}
@@ -42,6 +43,7 @@ func GenerateCareerStrategy(w http.ResponseWriter, r *http.Request) {
 
 	// Define the prompt for OpenAI
 	prompt := fmt.Sprintf("Create a career strategy for someone aiming to achieve %s income with current skills in %s. Goals: %s", req.DesiredIncome, req.CurrentSkills, req.Goals)
+	fmt.Printf("Prompt sent to OpenAI: %s\n", prompt)
 
 	// Make the request to OpenAI API
 	response, err := client.CreateChatCompletion(ctx, openai.ChatCompletionRequest{
@@ -54,13 +56,21 @@ func GenerateCareerStrategy(w http.ResponseWriter, r *http.Request) {
 		},
 	})
 
+	// Check for errors and log details
 	if err != nil {
-		fmt.Printf("OpenAI API error: %v\n", err) // Log the error details
-		http.Error(w, "Failed to generate strategy", http.StatusInternalServerError)
+		fmt.Printf("OpenAI API error: %v\n", err)
+		http.Error(w, fmt.Sprintf("Failed to generate strategy: %v", err), http.StatusInternalServerError)
 		return
 	}
 
-	// Extract the response from OpenAI
+	// Ensure response has content
+	if len(response.Choices) == 0 || response.Choices[0].Message.Content == "" {
+		fmt.Println("Error: Received empty response from OpenAI")
+		http.Error(w, "Received empty response from OpenAI", http.StatusInternalServerError)
+		return
+	}
+
+	// Extract and send the response
 	strategy := response.Choices[0].Message.Content
 	res := CareerStrategyResponse{Strategy: strategy}
 	w.Header().Set("Content-Type", "application/json")

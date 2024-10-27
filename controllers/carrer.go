@@ -1,140 +1,104 @@
 // controllers/recommendations.go
+
 package controllers
 
 import (
 	"encoding/json"
-	"fmt"
+	"hired-valley-backend/config"
+	"hired-valley-backend/models"
 	"log"
-	"math"
 	"net/http"
-	"os"
-	"sort"
-	"strings"
+	"strconv"
 
-	"github.com/cohere-ai/cohere-go"
-	"hired-valley-backend/models/users"
+	"github.com/gorilla/mux"
 )
 
-// Структура для хранения рекомендованного контента
-type RecommendedContent struct {
-	Content    string
-	Similarity float64
-}
-
-// Инициализация клиента Cohere
-var cohereClient *cohere.Client
-
-func InitCohereClient() {
-	var err error
-	cohereClient, err = cohere.CreateClient(os.Getenv("COHERE_API_KEY"))
-	if err != nil {
-		log.Fatalf("Ошибка создания клиента Cohere: %v", err)
-	}
-}
-
-// Обработчик для получения персонализированных рекомендаций
-func GetRecommendationsHandler(w http.ResponseWriter, r *http.Request) {
-	userID := r.Context().Value("userID") // Подразумевается, что userID извлекается из контекста
-	user, err := users.GetUserByID(userID)
-	if err != nil {
-		http.Error(w, "Пользователь не найден", http.StatusNotFound)
-		return
-	}
-
-	userProfileDescription := createUserProfileDescription(*user) // Разыменовываем указатель
-
-	userEmbedding, err := generateUserProfileEmbedding(userProfileDescription)
-	if err != nil {
-		http.Error(w, "Ошибка генерации профиля", http.StatusInternalServerError)
-		return
-	}
-
-	// Пример контента для рекомендаций
-	contentDescriptions := map[string]string{
-		"Golang Advanced Course":   "Advanced course on Golang for cloud-based applications.",
-		"Career Development Guide": "Guide on career development strategies for tech professionals.",
-		"Mentorship for Engineers": "Mentorship program for engineering leadership.",
-		"Cloud Services Tutorial":  "Tutorial on deploying applications to the cloud.",
-		"Tech Networking Tips":     "Tips on networking for software engineers.",
-	}
-
-	contentEmbeddings := make(map[string][]float64)
-	for title, description := range contentDescriptions {
-		embedding, err := generateContentEmbedding(description)
-		if err != nil {
-			log.Printf("Ошибка генерации вектора для %s: %v", title, err)
-			continue
+// SaveRecommendations сохраняет рекомендации для пользователя в базе данных
+func SaveRecommendations(userID uint, recommendations []models.RecommendedContent) error {
+	for _, recommendation := range recommendations {
+		rec := models.RecommendedContent{
+			UserID:     userID,
+			Content:    recommendation.Content,
+			Similarity: recommendation.Similarity,
 		}
-		contentEmbeddings[title] = embedding
+		if err := config.DB.Create(&rec).Error; err != nil {
+			log.Printf("Ошибка сохранения рекомендации: %v", err)
+			return err
+		}
+	}
+	return nil
+}
+
+// GetUserRecommendationsHandler возвращает последние рекомендации для конкретного пользователя
+func GetUserRecommendationsHandler(w http.ResponseWriter, r *http.Request) {
+	vars := mux.Vars(r)
+	userID, err := strconv.Atoi(vars["userID"])
+	if err != nil {
+		http.Error(w, "Неверный формат userID", http.StatusBadRequest)
+		return
 	}
 
-	recommendations := getPersonalizedContent(userEmbedding, contentEmbeddings)
+	var recommendations []models.RecommendedContent
+	if err := config.DB.Where("user_id = ?", userID).Order("created_at desc").Limit(10).Find(&recommendations).Error; err != nil {
+		http.Error(w, "Ошибка при получении рекомендаций", http.StatusInternalServerError)
+		return
+	}
 
-	// Отправка ответа с рекомендациями
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(recommendations)
 }
 
-// Создание текстового описания профиля пользователя
-func createUserProfileDescription(user users.User) string {
-	skills := make([]string, len(user.Skills))
-	for i, skill := range user.Skills {
-		skills[i] = skill.Name
+// GetRecommendationsHandlerWithFilters возвращает рекомендации с возможностью фильтрации и сортировки
+func GetRecommendationsHandlerWithFilters(w http.ResponseWriter, r *http.Request) {
+	userID := r.URL.Query().Get("user_id")
+	limit := r.URL.Query().Get("limit")
+	sort := r.URL.Query().Get("sort")
+
+	var recommendations []models.RecommendedContent
+	query := config.DB
+
+	// Фильтр по userID
+	if userID != "" {
+		query = query.Where("user_id = ?", userID)
 	}
 
-	interests := make([]string, len(user.Interests))
-	for i, interest := range user.Interests {
-		interests[i] = interest.Name
+	// Лимит результатов
+	limitInt := 10
+	if limit != "" {
+		limitInt, _ = strconv.Atoi(limit)
+	}
+	query = query.Limit(limitInt)
+
+	// Сортировка
+	if sort == "asc" {
+		query = query.Order("created_at asc")
+	} else {
+		query = query.Order("created_at desc")
 	}
 
-	return fmt.Sprintf("Position: %s, City: %s, Skills: %s, Interests: %s, Preferences: %s",
-		user.Position, user.City, strings.Join(skills, ", "), strings.Join(interests, ", "), user.ContentPreferences)
+	if err := query.Find(&recommendations).Error; err != nil {
+		http.Error(w, "Ошибка при получении рекомендаций", http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(recommendations)
 }
 
-// Генерация вектора профиля пользователя
-func generateUserProfileEmbedding(profileDescription string) ([]float64, error) {
-	response, err := cohereClient.Embed(cohere.EmbedOptions{
-		Texts: []string{profileDescription},
-		Model: "embed-english-v2.0",
-	})
-	if err != nil {
-		return nil, err
+// TempCreateRecommendationsHandler временный обработчик для создания рекомендаций (только для тестирования)
+func TempCreateRecommendationsHandler(w http.ResponseWriter, r *http.Request) {
+	var recommendations []models.RecommendedContent
+	if err := json.NewDecoder(r.Body).Decode(&recommendations); err != nil {
+		http.Error(w, "Invalid request payload", http.StatusBadRequest)
+		return
 	}
-	return response.Embeddings[0], nil
-}
 
-// Генерация вектора для контента
-func generateContentEmbedding(contentDescription string) ([]float64, error) {
-	response, err := cohereClient.Embed(cohere.EmbedOptions{
-		Texts: []string{contentDescription},
-		Model: "embed-english-v2.0",
-	})
-	if err != nil {
-		return nil, err
+	userID := recommendations[0].UserID // Предполагается, что все рекомендации для одного пользователя
+	if err := SaveRecommendations(userID, recommendations); err != nil {
+		http.Error(w, "Failed to save recommendations", http.StatusInternalServerError)
+		return
 	}
-	return response.Embeddings[0], nil
-}
 
-// Косинусное сходство
-func calculateCosineSimilarity(vecA, vecB []float64) float64 {
-	var dotProduct, magnitudeA, magnitudeB float64
-	for i := range vecA {
-		dotProduct += vecA[i] * vecB[i]
-		magnitudeA += vecA[i] * vecA[i]
-		magnitudeB += vecB[i] * vecB[i]
-	}
-	return dotProduct / (math.Sqrt(magnitudeA) * math.Sqrt(magnitudeB))
-}
-
-// Получение персонализированного контента
-func getPersonalizedContent(userEmbedding []float64, contentEmbeddings map[string][]float64) []RecommendedContent {
-	var recommendations []RecommendedContent
-	for content, embedding := range contentEmbeddings {
-		similarity := calculateCosineSimilarity(userEmbedding, embedding)
-		recommendations = append(recommendations, RecommendedContent{Content: content, Similarity: similarity})
-	}
-	sort.Slice(recommendations, func(i, j int) bool {
-		return recommendations[i].Similarity > recommendations[j].Similarity
-	})
-	return recommendations[:5] // Топ-5 рекомендаций
+	w.WriteHeader(http.StatusCreated)
+	json.NewEncoder(w).Encode(map[string]string{"message": "Recommendations saved successfully"})
 }

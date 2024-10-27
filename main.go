@@ -6,6 +6,7 @@ import (
 	"hired-valley-backend/controllers"
 	"hired-valley-backend/controllers/authentication"
 	"hired-valley-backend/controllers/course"
+	"hired-valley-backend/models"
 	"hired-valley-backend/models/courses"
 	"hired-valley-backend/models/users"
 	"log"
@@ -32,6 +33,7 @@ func main() {
 		&users.LinkedInUser{},
 		&courses.Course{},
 		&courses.Lesson{},
+		&models.RecommendedContent{},
 	)
 	if err != nil {
 		log.Fatalf("Ошибка миграции базы данных: %v", err)
@@ -71,7 +73,10 @@ func main() {
 	http.HandleFunc("/list/lessons", course.ListLessons)
 	http.HandleFunc("/create/lessons", course.CreateLesson)
 
-	http.HandleFunc("/recommendations", controllers.GetRecommendationsHandler)
+	http.HandleFunc("/users/{userID}/recommendations", controllers.GetUserRecommendationsHandler)
+	http.HandleFunc("/recommendations", controllers.GetRecommendationsHandlerWithFilters)
+
+	http.HandleFunc("/temp/recommendations", controllers.TempCreateRecommendationsHandler)
 
 	// Запускаем сервер
 	log.Printf("Сервер запущен на порту %s", port)

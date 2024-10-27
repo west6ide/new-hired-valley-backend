@@ -71,7 +71,7 @@ func main() {
 	http.HandleFunc("/list/lessons", course.ListLessons)
 	http.HandleFunc("/create/lessons", course.CreateLesson)
 
-	http.HandleFunc("/career-strategy", controllers.GenerateCareerStrategy)
+	http.HandleFunc("/recommendations", controllers.GetRecommendationsHandler)
 
 	// Запускаем сервер
 	log.Printf("Сервер запущен на порту %s", port)

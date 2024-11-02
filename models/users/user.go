@@ -2,7 +2,6 @@ package users
 
 import (
 	"gorm.io/gorm"
-	"hired-valley-backend/config"
 	"time"
 )
 
@@ -54,13 +53,4 @@ type Skill struct {
 type Interest struct {
 	ID   uint   `gorm:"primaryKey"`
 	Name string `gorm:"unique;not null"`
-}
-
-func GetUserByID(userID interface{}) (*User, error) {
-	var user User
-	result := config.DB.First(&user, userID)
-	if result.Error != nil {
-		return nil, result.Error
-	}
-	return &user, nil
 }

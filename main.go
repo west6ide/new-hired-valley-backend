@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"github.com/gorilla/mux"
 	"hired-valley-backend/config"
 	"hired-valley-backend/controllers"
 	"hired-valley-backend/controllers/authentication"
@@ -12,6 +13,7 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"time"
 )
 
 func main() {
@@ -33,7 +35,7 @@ func main() {
 		&users.LinkedInUser{},
 		&courses.Course{},
 		&courses.Lesson{},
-		&models.RecommendedContent{},
+		&models.Story{},
 	)
 	if err != nil {
 		log.Fatalf("Ошибка миграции базы данных: %v", err)
@@ -51,6 +53,8 @@ func main() {
 	} else {
 		log.Println("Подключение к базе данных успешно")
 	}
+
+	r := mux.NewRouter()
 
 	// Настраиваем маршруты
 	http.HandleFunc("/", handleHome)
@@ -73,10 +77,10 @@ func main() {
 	http.HandleFunc("/list/lessons", course.ListLessons)
 	http.HandleFunc("/create/lessons", course.CreateLesson)
 
-	http.HandleFunc("/users/{userID}/recommendations", controllers.GetUserRecommendationsHandler)
-	http.HandleFunc("/recommendations", controllers.GetRecommendationsHandlerWithFilters)
-
-	http.HandleFunc("/temp/recommendations", controllers.TempCreateRecommendationsHandler)
+	r.HandleFunc("/stories", controllers.CreateStory).Methods("POST")
+	r.HandleFunc("/stories", controllers.GetActiveStories).Methods("GET")
+	r.HandleFunc("/stories/{id:[0-9]+}/archive", controllers.ArchiveStory).Methods("PATCH")
+	r.HandleFunc("/users/{user_id:[0-9]+}/archived-stories", controllers.GetArchivedStories).Methods("GET")
 
 	// Запускаем сервер
 	log.Printf("Сервер запущен на порту %s", port)
@@ -119,5 +123,12 @@ func handleHome(w http.ResponseWriter, r *http.Request) {
                    <a href="/login/linkedin">Войти через LinkedIn</a>
                  </body></html>`
 		fmt.Fprint(w, html)
+	}
+}
+
+func RemoveExpiredStories() {
+	for {
+		config.DB.Where("expires_at <= ?", time.Now()).Delete(&models.Story{})
+		time.Sleep(1 * time.Hour) // Запуск каждые 1 час
 	}
 }

@@ -9,13 +9,12 @@ import (
 
 	"github.com/gorilla/mux"
 	"hired-valley-backend/config"
-	"hired-valley-backend/models"
 	"hired-valley-backend/models/users"
 )
 
 // CreateStory - обработчик для создания истории
 func CreateStory(w http.ResponseWriter, r *http.Request) {
-	var story models.Story
+	var story users.Story
 	decoder := json.NewDecoder(r.Body)
 	if err := decoder.Decode(&story); err != nil {
 		log.Printf("Ошибка при декодировании JSON: %v", err)
@@ -49,7 +48,7 @@ func CreateStory(w http.ResponseWriter, r *http.Request) {
 
 // GetActiveStories - обработчик для получения всех активных историй
 func GetActiveStories(w http.ResponseWriter, r *http.Request) {
-	var stories []models.Story
+	var stories []users.Story
 	config.DB.Where("expires_at > ? AND is_archived = ?", time.Now(), false).Find(&stories)
 
 	w.Header().Set("Content-Type", "application/json")
@@ -65,7 +64,7 @@ func ArchiveStory(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var story models.Story
+	var story users.Story
 	if err := config.DB.First(&story, id).Error; err != nil {
 		http.Error(w, "Story not found", http.StatusNotFound)
 		return
@@ -91,7 +90,7 @@ func GetArchivedStories(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var stories []models.Story
+	var stories []users.Story
 	config.DB.Where("user_id = ? AND is_archived = ?", userID, true).Find(&stories)
 
 	w.Header().Set("Content-Type", "application/json")

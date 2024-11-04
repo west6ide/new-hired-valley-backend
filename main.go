@@ -6,7 +6,6 @@ import (
 	"hired-valley-backend/controllers"
 	"hired-valley-backend/controllers/authentication"
 	"hired-valley-backend/controllers/course"
-	"hired-valley-backend/models"
 	"hired-valley-backend/models/courses"
 	"hired-valley-backend/models/users"
 	"log"
@@ -34,7 +33,7 @@ func main() {
 		&users.LinkedInUser{},
 		&courses.Course{},
 		&courses.Lesson{},
-		&models.Story{},
+		&users.Story{},
 	)
 	if err != nil {
 		log.Fatalf("Ошибка миграции базы данных: %v", err)
@@ -125,7 +124,7 @@ func handleHome(w http.ResponseWriter, r *http.Request) {
 
 func RemoveExpiredStories() {
 	for {
-		config.DB.Where("expires_at <= ?", time.Now()).Delete(&models.Story{})
+		config.DB.Where("expires_at <= ?", time.Now()).Delete(&users.Story{})
 		time.Sleep(1 * time.Hour) // Запуск каждые 1 час
 	}
 }

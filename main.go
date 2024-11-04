@@ -2,7 +2,6 @@ package main
 
 import (
 	"fmt"
-	"github.com/gorilla/mux"
 	"hired-valley-backend/config"
 	"hired-valley-backend/controllers"
 	"hired-valley-backend/controllers/authentication"
@@ -54,8 +53,6 @@ func main() {
 		log.Println("Подключение к базе данных успешно")
 	}
 
-	r := mux.NewRouter()
-
 	// Настраиваем маршруты
 	http.HandleFunc("/", handleHome)
 	http.HandleFunc("/login/google", authentication.HandleGoogleLogin)
@@ -77,10 +74,10 @@ func main() {
 	http.HandleFunc("/list/lessons", course.ListLessons)
 	http.HandleFunc("/create/lessons", course.CreateLesson)
 
-	r.HandleFunc("/stories", controllers.CreateStory).Methods("POST")
-	r.HandleFunc("/stories", controllers.GetActiveStories).Methods("GET")
-	r.HandleFunc("/stories/{id:[0-9]+}/archive", controllers.ArchiveStory).Methods("PATCH")
-	r.HandleFunc("/users/{user_id:[0-9]+}/archived-stories", controllers.GetArchivedStories).Methods("GET")
+	http.HandleFunc("/create/stories", controllers.CreateStory)
+	http.HandleFunc("/list/stories", controllers.GetActiveStories)
+	http.HandleFunc("/stories/{id:[0-9]+}/archive", controllers.ArchiveStory)
+	http.HandleFunc("/users/{user_id:[0-9]+}/archived-stories", controllers.GetArchivedStories)
 
 	// Запускаем сервер
 	log.Printf("Сервер запущен на порту %s", port)

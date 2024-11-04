@@ -7,7 +7,6 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/gorilla/mux"
 	"hired-valley-backend/config"
 	"hired-valley-backend/models/users"
 )
@@ -57,8 +56,8 @@ func GetActiveStories(w http.ResponseWriter, r *http.Request) {
 
 // ArchiveStory - обработчик для архивации истории
 func ArchiveStory(w http.ResponseWriter, r *http.Request) {
-	vars := mux.Vars(r)
-	id, err := strconv.Atoi(vars["id"])
+	idStr := r.URL.Query().Get("id")
+	id, err := strconv.Atoi(idStr)
 	if err != nil {
 		http.Error(w, "Invalid story ID", http.StatusBadRequest)
 		return
@@ -83,8 +82,8 @@ func ArchiveStory(w http.ResponseWriter, r *http.Request) {
 
 // GetArchivedStories - обработчик для получения архивированных историй
 func GetArchivedStories(w http.ResponseWriter, r *http.Request) {
-	vars := mux.Vars(r)
-	userID, err := strconv.Atoi(vars["user_id"])
+	userIDStr := r.URL.Query().Get("user_id")
+	userID, err := strconv.Atoi(userIDStr)
 	if err != nil {
 		http.Error(w, "Invalid user ID", http.StatusBadRequest)
 		return

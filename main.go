@@ -75,8 +75,8 @@ func main() {
 
 	http.HandleFunc("/create/stories", controllers.CreateStory)
 	http.HandleFunc("/list/stories", controllers.GetActiveStories)
-	http.HandleFunc("/stories/{id:[0-9]+}/archive", controllers.ArchiveStory)
-	http.HandleFunc("/users/{user_id:[0-9]+}/archived-stories", controllers.GetArchivedStories)
+	http.HandleFunc("/stories/archive", controllers.ArchiveStory)              // Параметр id передается как query параметр
+	http.HandleFunc("/users/archived-stories", controllers.GetArchivedStories) // Параметр user_id передается как query параметр
 
 	// Запускаем сервер
 	log.Printf("Сервер запущен на порту %s", port)

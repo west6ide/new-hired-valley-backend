@@ -14,20 +14,12 @@ import (
 	"hired-valley-backend/models/users"
 )
 
-// CreateStory - обработчик для создания истории
 func CreateStory(w http.ResponseWriter, r *http.Request) {
-	// Получаем заголовок авторизации
+	// Извлекаем токен из заголовка
 	authHeader := r.Header.Get("Authorization")
-	if authHeader == "" {
-		http.Error(w, "Authorization header required", http.StatusUnauthorized)
-		return
-	}
-
-	// Убираем "Bearer " из начала заголовка
 	tokenString := strings.TrimPrefix(authHeader, "Bearer ")
 	claims := &authentication.Claims{}
 
-	// Парсим и валидируем токен
 	token, err := jwt.ParseWithClaims(tokenString, claims, func(token *jwt.Token) (interface{}, error) {
 		return authentication.JwtKey, nil
 	})
@@ -37,26 +29,24 @@ func CreateStory(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Создаем новую историю, привязывая её к идентификатору пользователя из токена
-	var newStory users.Story
-	if err := json.NewDecoder(r.Body).Decode(&newStory); err != nil {
+	var story users.Story
+	if err := json.NewDecoder(r.Body).Decode(&story); err != nil {
 		http.Error(w, "Invalid input", http.StatusBadRequest)
 		return
 	}
 
-	newStory.UserID = claims.UserID                     // Привязка истории к пользователю
-	newStory.CreatedAt = time.Now()                     // Устанавливаем время создания истории
-	newStory.ExpiresAt = time.Now().Add(24 * time.Hour) // Устанавливаем срок действия истории на 24 часа
+	story.UserID = authentication.Claims{}.UserID // Устанавливаем ID пользователя из токена
+	story.CreatedAt = time.Now()
+	story.ExpiresAt = time.Now()
 
-	// Сохраняем историю в базе данных
-	if err := config.DB.Create(&newStory).Error; err != nil {
+	if err := config.DB.Create(&story).Error; err != nil {
+		log.Printf("Ошибка при сохранении сториса в базе данных: %v", err)
 		http.Error(w, "Error saving story", http.StatusInternalServerError)
 		return
 	}
 
-	// Возвращаем ответ с созданной историей
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(newStory)
+	json.NewEncoder(w).Encode(story)
 }
 
 // GetActiveStories - обработчик для получения всех активных историй

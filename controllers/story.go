@@ -2,15 +2,15 @@ package controllers
 
 import (
 	"encoding/json"
+	"hired-valley-backend/config"
+	"hired-valley-backend/models/users"
 	"log"
 	"net/http"
 	"strconv"
 	"time"
-
-	"hired-valley-backend/config"
-	"hired-valley-backend/models/users"
 )
 
+// Создание истории
 func CreateStory(w http.ResponseWriter, r *http.Request) {
 	var story users.Story
 
@@ -19,9 +19,7 @@ func CreateStory(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Логируем UserID для отладки
-	log.Printf("Creating story for UserID: %d", story.UserID)
-
+	// Проверяем, существует ли пользователь с данным UserID
 	var user users.User
 	if err := config.DB.First(&user, story.UserID).Error; err != nil {
 		log.Printf("User not found with ID: %d", story.UserID)
@@ -30,10 +28,10 @@ func CreateStory(w http.ResponseWriter, r *http.Request) {
 	}
 
 	story.CreatedAt = time.Now()
-	story.ExpiresAt = time.Now().Add(24 * time.Hour)
+	story.ExpiresAt = time.Now().Add(24 * time.Hour) // История истечет через 24 часа
 
 	if err := config.DB.Create(&story).Error; err != nil {
-		log.Printf("Ошибка при сохранении сториса в базе данных: %v", err)
+		log.Printf("Error saving story: %v", err)
 		http.Error(w, "Error saving story", http.StatusInternalServerError)
 		return
 	}
@@ -42,16 +40,32 @@ func CreateStory(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(story)
 }
 
-// GetActiveStories - обработчик для получения всех активных историй
+// Получение всех активных (не истекших) публичных историй
 func GetActiveStories(w http.ResponseWriter, r *http.Request) {
 	var stories []users.Story
-	config.DB.Where("expires_at > ? AND is_archived = ?", time.Now(), false).Find(&stories)
+	config.DB.Where("expires_at > ? AND is_archived = ? AND is_public = ?", time.Now(), false, true).Find(&stories)
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(stories)
 }
 
-// ArchiveStory - обработчик для архивации истории
+// Получение всех активных историй пользователя
+func GetUserStories(w http.ResponseWriter, r *http.Request) {
+	userIDStr := r.URL.Query().Get("user_id")
+	userID, err := strconv.Atoi(userIDStr)
+	if err != nil {
+		http.Error(w, "Invalid user ID", http.StatusBadRequest)
+		return
+	}
+
+	var stories []users.Story
+	config.DB.Where("user_id = ? AND expires_at > ?", userID, time.Now()).Find(&stories)
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(stories)
+}
+
+// Архивирование истории
 func ArchiveStory(w http.ResponseWriter, r *http.Request) {
 	idStr := r.URL.Query().Get("id")
 	id, err := strconv.Atoi(idStr)
@@ -68,27 +82,11 @@ func ArchiveStory(w http.ResponseWriter, r *http.Request) {
 
 	story.IsArchived = true
 	if err := config.DB.Save(&story).Error; err != nil {
-		log.Printf("Ошибка при архивации истории: %v", err)
+		log.Printf("Error archiving story: %v", err)
 		http.Error(w, "Failed to archive story", http.StatusInternalServerError)
 		return
 	}
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(story)
-}
-
-// GetArchivedStories - обработчик для получения архивированных историй
-func GetArchivedStories(w http.ResponseWriter, r *http.Request) {
-	userIDStr := r.URL.Query().Get("user_id")
-	userID, err := strconv.Atoi(userIDStr)
-	if err != nil {
-		http.Error(w, "Invalid user ID", http.StatusBadRequest)
-		return
-	}
-
-	var stories []users.Story
-	config.DB.Where("user_id = ? AND is_archived = ?", userID, true).Find(&stories)
-
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(stories)
 }

@@ -6,10 +6,12 @@ import (
 
 type Story struct {
 	ID         uint      `gorm:"primaryKey"`
-	UserID     uint      `json:"user_id" gorm:"not null"` // Добавляем JSON-тег
-	User       User      `gorm:"constraint:OnUpdate:CASCADE,OnDelete:CASCADE;"`
-	Content    string    `gorm:"type:text;not null"`
+	UserID     uint      `json:"user_id" gorm:"not null"` // ID пользователя, связанного с историей
+	Content    string    `gorm:"type:text"`               // Текст (опционально)
+	MediaURL   string    `json:"media_url"`               // URL медиафайла (фото или видео)
+	MediaType  string    `json:"media_type"`              // Тип медиа (image или video)
 	CreatedAt  time.Time `gorm:"autoCreateTime"`
-	ExpiresAt  time.Time
-	IsArchived bool `gorm:"default:false"`
+	ExpiresAt  time.Time // Дата истечения истории
+	IsArchived bool      `gorm:"default:false"` // Архивирована ли история
+	IsPublic   bool      `gorm:"default:true"`  // Видимость истории (публичная или нет)
 }

@@ -35,9 +35,9 @@ func CreateStory(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	story.UserID = authentication.Claims{}.UserID // Устанавливаем ID пользователя из токена
+	story.UserID = claims.UserID // Устанавливаем ID пользователя из токена
 	story.CreatedAt = time.Now()
-	story.ExpiresAt = time.Now()
+	story.ExpiresAt = time.Now().Add(24 * time.Hour) // Устанавливаем срок действия на 24 часа
 
 	if err := config.DB.Create(&story).Error; err != nil {
 		log.Printf("Ошибка при сохранении сториса в базе данных: %v", err)

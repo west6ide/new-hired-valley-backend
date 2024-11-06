@@ -2,12 +2,9 @@ package controllers
 
 import (
 	"encoding/json"
-	"github.com/dgrijalva/jwt-go"
-	"hired-valley-backend/controllers/authentication"
 	"log"
 	"net/http"
 	"strconv"
-	"strings"
 	"time"
 
 	"hired-valley-backend/config"
@@ -15,36 +12,33 @@ import (
 )
 
 func CreateStory(w http.ResponseWriter, r *http.Request) {
-	// Извлекаем токен из заголовка
-	authHeader := r.Header.Get("Authorization")
-	tokenString := strings.TrimPrefix(authHeader, "Bearer ")
-	claims := &authentication.Claims{}
-
-	token, err := jwt.ParseWithClaims(tokenString, claims, func(token *jwt.Token) (interface{}, error) {
-		return authentication.JwtKey, nil
-	})
-
-	if err != nil || !token.Valid {
-		http.Error(w, "Invalid token", http.StatusUnauthorized)
-		return
-	}
-
 	var story users.Story
+
+	// Декодируем JSON-запрос для создания истории, включая UserID
 	if err := json.NewDecoder(r.Body).Decode(&story); err != nil {
 		http.Error(w, "Invalid input", http.StatusBadRequest)
 		return
 	}
 
-	story.UserID = claims.UserID // Устанавливаем ID пользователя из токена
-	story.CreatedAt = time.Now()
-	story.ExpiresAt = time.Now().Add(24 * time.Hour) // Устанавливаем срок действия на 24 часа
+	// Проверяем, существует ли пользователь с данным ID
+	var user users.User
+	if err := config.DB.First(&user, story.UserID).Error; err != nil {
+		http.Error(w, "User not found", http.StatusNotFound)
+		return
+	}
 
+	// Устанавливаем время создания и срок действия истории
+	story.CreatedAt = time.Now()
+	story.ExpiresAt = time.Now().Add(24 * time.Hour) // История будет доступна 24 часа
+
+	// Сохраняем историю в базе данных
 	if err := config.DB.Create(&story).Error; err != nil {
 		log.Printf("Ошибка при сохранении сториса в базе данных: %v", err)
 		http.Error(w, "Error saving story", http.StatusInternalServerError)
 		return
 	}
 
+	// Возвращаем созданную историю в ответе
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(story)
 }

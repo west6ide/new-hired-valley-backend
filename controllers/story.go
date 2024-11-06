@@ -14,31 +14,30 @@ import (
 func CreateStory(w http.ResponseWriter, r *http.Request) {
 	var story users.Story
 
-	// Декодируем JSON-запрос для создания истории, включая UserID
 	if err := json.NewDecoder(r.Body).Decode(&story); err != nil {
 		http.Error(w, "Invalid input", http.StatusBadRequest)
 		return
 	}
 
-	// Проверяем, существует ли пользователь с данным ID
+	// Логируем UserID для отладки
+	log.Printf("Creating story for UserID: %d", story.UserID)
+
 	var user users.User
 	if err := config.DB.First(&user, story.UserID).Error; err != nil {
+		log.Printf("User not found with ID: %d", story.UserID)
 		http.Error(w, "User not found", http.StatusNotFound)
 		return
 	}
 
-	// Устанавливаем время создания и срок действия истории
 	story.CreatedAt = time.Now()
-	story.ExpiresAt = time.Now().Add(24 * time.Hour) // История будет доступна 24 часа
+	story.ExpiresAt = time.Now().Add(24 * time.Hour)
 
-	// Сохраняем историю в базе данных
 	if err := config.DB.Create(&story).Error; err != nil {
 		log.Printf("Ошибка при сохранении сториса в базе данных: %v", err)
 		http.Error(w, "Error saving story", http.StatusInternalServerError)
 		return
 	}
 
-	// Возвращаем созданную историю в ответе
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(story)
 }

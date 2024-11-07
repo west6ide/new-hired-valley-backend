@@ -9,12 +9,11 @@ import (
 	"gorm.io/gorm"
 	"hired-valley-backend/config"
 	"hired-valley-backend/models/users"
-	"io/ioutil"
 	"log"
 	"os"
 )
 
-// Настройка конфигурации OAuth для Google
+// Настройка Google OAuth конфигурации
 var googleOauthConfig = &oauth2.Config{
 	RedirectURL:  os.Getenv("GOOGLE_REDIRECT_URL"),
 	ClientID:     os.Getenv("GOOGLE_CLIENT_ID"),
@@ -23,7 +22,7 @@ var googleOauthConfig = &oauth2.Config{
 	Endpoint:     google.Endpoint,
 }
 
-// Инициализация менеджера сессий Fiber
+// Настройка Fiber Sessions
 var store = session.New()
 
 // Инициализация переменных окружения
@@ -33,17 +32,21 @@ func init() {
 	}
 }
 
-// HandleGoogleLogin инициирует авторизацию через Google OAuth
+// HandleGoogleLogin инициализирует Google OAuth процесс
 func HandleGoogleLogin(c *fiber.Ctx) error {
-	state := "google" // Используем простой state для примера, лучше генерировать случайное значение
+	state := "random-state" // Это может быть сгенерировано случайно для безопасности
 	url := googleOauthConfig.AuthCodeURL(state)
+	sess, _ := store.Get(c)
+	sess.Set("state", state)
+	sess.Save()
 	return c.Redirect(url)
 }
 
-// HandleGoogleCallback обрабатывает коллбэк OAuth и получает информацию о пользователе от Google
+// HandleGoogleCallback обрабатывает OAuth callback и получает информацию о пользователе от Google
 func HandleGoogleCallback(c *fiber.Ctx) error {
-	state := "google"
-	if c.Query("state") != state {
+	sess, _ := store.Get(c)
+	savedState := sess.Get("state")
+	if savedState == nil || savedState != c.Query("state") {
 		log.Println("Invalid OAuth state")
 		return c.Redirect("/")
 	}
@@ -54,22 +57,17 @@ func HandleGoogleCallback(c *fiber.Ctx) error {
 		return c.Redirect("/")
 	}
 
-	// Запрос информации о пользователе
-	resp, err := googleOauthConfig.Client(c.Context(), token).Get("https://www.googleapis.com/oauth2/v2/userinfo")
+	// Запрос на получение данных пользователя
+	client := googleOauthConfig.Client(c.Context(), token)
+	resp, err := client.Get("https://www.googleapis.com/oauth2/v2/userinfo")
 	if err != nil {
 		log.Printf("Error while fetching user info: %s", err.Error())
 		return c.Redirect("/")
 	}
 	defer resp.Body.Close()
 
-	content, err := ioutil.ReadAll(resp.Body)
-	if err != nil {
-		log.Printf("Error reading response: %s", err.Error())
-		return c.Redirect("/")
-	}
-
 	var userInfo map[string]interface{}
-	if err := json.Unmarshal(content, &userInfo); err != nil {
+	if err := json.NewDecoder(resp.Body).Decode(&userInfo); err != nil {
 		log.Printf("Error parsing user info: %s", err.Error())
 		return c.Redirect("/")
 	}
@@ -98,7 +96,7 @@ func HandleGoogleCallback(c *fiber.Ctx) error {
 		return c.Redirect("/")
 	}
 
-	// Проверка пользователя в базе данных
+	// Проверка существования пользователя в базе данных
 	var user users.User
 	if err := config.DB.Where("email = ?", email).First(&user).Error; err != nil {
 		if err == gorm.ErrRecordNotFound {
@@ -151,19 +149,12 @@ func HandleGoogleCallback(c *fiber.Ctx) error {
 		}
 	}
 
-	// Создание сессии пользователя
-	sess, err := store.Get(c)
-	if err != nil {
-		log.Printf("Error getting session: %s", err.Error())
-		return c.Status(fiber.StatusInternalServerError).SendString("Error getting session")
-	}
-
+	// Сохранение данных пользователя в сессии
 	sess.Set("user_id", user.ID)
 	if err := sess.Save(); err != nil {
 		log.Printf("Error saving session: %s", err.Error())
 		return c.Status(fiber.StatusInternalServerError).SendString("Error saving session")
 	}
 
-	// Перенаправляем пользователя на защищенную страницу
 	return c.Redirect("/welcome")
 }

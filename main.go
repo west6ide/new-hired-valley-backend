@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"github.com/gofiber/fiber/v2"
 	"hired-valley-backend/config"
 	"hired-valley-backend/controllers"
 	"hired-valley-backend/controllers/authentication"
@@ -19,6 +20,8 @@ func main() {
 	if port == "" {
 		port = "8080" // Устанавливаем порт по умолчанию
 	}
+
+	app := fiber.New()
 
 	// Инициализируем базу данных
 	err := config.InitDB()
@@ -54,8 +57,8 @@ func main() {
 
 	// Настраиваем маршруты
 	http.HandleFunc("/", handleHome)
-	http.HandleFunc("/login/google", authentication.HandleGoogleLogin)
-	http.HandleFunc("/callback/google", authentication.HandleGoogleCallback)
+	app.Get("/auth/google/login", authentication.HandleGoogleLogin)
+	app.Get("/auth/google/callback", authentication.HandleGoogleCallback)
 	http.HandleFunc("/login/linkedin", authentication.HandleLinkedInLogin)
 	http.HandleFunc("/callback/linkedin", authentication.HandleLinkedInCallback)
 
@@ -75,8 +78,13 @@ func main() {
 
 	http.HandleFunc("/create/stories", controllers.CreateStory)
 	http.HandleFunc("/list/stories", controllers.GetActiveStories)
-	http.HandleFunc("/stories/archive", controllers.ArchiveStory)              // Параметр id передается как query параметр
-	http.HandleFunc("/users/archived-stories", controllers.GetArchivedStories) // Параметр user_id передается как query параметр
+	http.HandleFunc("/stories/archive", controllers.ArchiveStory) // Параметр id передается как query параметр
+
+	// Настройка маршрутов
+	app.Post("/mentors", controllers.CreateMentorProfile)
+	app.Get("/mentors", controllers.GetMentors)
+	app.Post("/sessions", controllers.CreateMentorshipSession)
+	app.Patch("/sessions/:id/status", controllers.UpdateSessionStatus)
 
 	// Запускаем сервер
 	log.Printf("Сервер запущен на порту %s", port)

@@ -37,6 +37,10 @@ func main() {
 		&courses.Course{},
 		&courses.Lesson{},
 		&users.Story{},
+		&users.MentorProfile{},
+		&users.MentorshipSession{},
+		&users.Availability{},
+		&users.Review{},
 	)
 	if err != nil {
 		log.Fatalf("Ошибка миграции базы данных: %v", err)
@@ -57,8 +61,8 @@ func main() {
 
 	// Настраиваем маршруты
 	http.HandleFunc("/", handleHome)
-	app.Get("/auth/google/login", authentication.HandleGoogleLogin)
-	app.Get("/auth/google/callback", authentication.HandleGoogleCallback)
+	http.HandleFunc("/login/google", authentication.HandleGoogleLogin)
+	http.HandleFunc("/callback/google", authentication.HandleGoogleCallback)
 	http.HandleFunc("/login/linkedin", authentication.HandleLinkedInLogin)
 	http.HandleFunc("/callback/linkedin", authentication.HandleLinkedInCallback)
 

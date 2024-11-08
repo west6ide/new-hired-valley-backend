@@ -2,105 +2,126 @@ package authentication
 
 import (
 	"encoding/json"
-	"github.com/gofiber/fiber/v2"
-	"github.com/gofiber/fiber/v2/middleware/session"
+	"github.com/gorilla/sessions"
 	"golang.org/x/oauth2"
 	"golang.org/x/oauth2/google"
 	"gorm.io/gorm"
 	"hired-valley-backend/config"
 	"hired-valley-backend/models/users"
+	"io/ioutil"
 	"log"
+	"net/http"
 	"os"
 )
 
-// Настройка Google OAuth конфигурации
-var googleOauthConfig = &oauth2.Config{
-	RedirectURL:  os.Getenv("GOOGLE_REDIRECT_URL"),
-	ClientID:     os.Getenv("GOOGLE_CLIENT_ID"),
-	ClientSecret: os.Getenv("GOOGLE_CLIENT_SECRET"),
-	Scopes:       []string{"https://www.googleapis.com/auth/userinfo.email", "https://www.googleapis.com/auth/userinfo.profile"},
-	Endpoint:     google.Endpoint,
-}
+var (
+	googleOauthConfig = &oauth2.Config{
+		RedirectURL:  os.Getenv("GOOGLE_REDIRECT_URL"),
+		ClientID:     os.Getenv("GOOGLE_CLIENT_ID"),
+		ClientSecret: os.Getenv("GOOGLE_CLIENT_SECRET"),
+		Scopes:       []string{"https://www.googleapis.com/auth/userinfo.email", "https://www.googleapis.com/auth/userinfo.profile"},
+		Endpoint:     google.Endpoint,
+	}
+	store = sessions.NewCookieStore([]byte(os.Getenv("SESSION_SECRET")))
+)
 
-// Настройка Fiber Sessions
-var store = session.New()
-
-// Инициализация переменных окружения
 func init() {
+	// Проверка, что все переменные окружения заданы
 	if googleOauthConfig.ClientID == "" || googleOauthConfig.ClientSecret == "" || googleOauthConfig.RedirectURL == "" {
 		log.Fatal("Не установлены переменные окружения для Google OAuth")
 	}
+
+	// Настройки для сессий (опционально для безопасности)
+	store.Options = &sessions.Options{
+		Path:     "/",
+		MaxAge:   3600 * 8, // Время жизни сессии в секундах (8 часов)
+		HttpOnly: true,     // Куки не доступны через JavaScript
+		Secure:   false,    // Используйте true для HTTPS
+		SameSite: http.SameSiteStrictMode,
+	}
 }
 
-// HandleGoogleLogin инициализирует Google OAuth процесс
-func HandleGoogleLogin(c *fiber.Ctx) error {
-	state := "random-state" // Это может быть сгенерировано случайно для безопасности
+// HandleGoogleLogin initiates Google OAuth login
+func HandleGoogleLogin(w http.ResponseWriter, r *http.Request) {
+	state := "google"
 	url := googleOauthConfig.AuthCodeURL(state)
-	sess, _ := store.Get(c)
-	sess.Set("state", state)
-	sess.Save()
-	return c.Redirect(url)
+	http.Redirect(w, r, url, http.StatusTemporaryRedirect)
 }
 
-// HandleGoogleCallback обрабатывает OAuth callback и получает информацию о пользователе от Google
-func HandleGoogleCallback(c *fiber.Ctx) error {
-	sess, _ := store.Get(c)
-	savedState := sess.Get("state")
-	if savedState == nil || savedState != c.Query("state") {
+// HandleGoogleCallback processes the OAuth callback and retrieves user info from Google
+func HandleGoogleCallback(w http.ResponseWriter, r *http.Request) {
+	state := "google"
+	if r.FormValue("state") != state {
 		log.Println("Invalid OAuth state")
-		return c.Redirect("/")
+		http.Redirect(w, r, "/", http.StatusTemporaryRedirect)
+		return
 	}
 
-	token, err := googleOauthConfig.Exchange(c.Context(), c.Query("code"))
+	token, err := googleOauthConfig.Exchange(r.Context(), r.FormValue("code"))
 	if err != nil {
 		log.Printf("Error while exchanging code for token: %s", err.Error())
-		return c.Redirect("/")
+		http.Redirect(w, r, "/", http.StatusTemporaryRedirect)
+		return
 	}
 
-	// Запрос на получение данных пользователя
-	client := googleOauthConfig.Client(c.Context(), token)
-	resp, err := client.Get("https://www.googleapis.com/oauth2/v2/userinfo")
+	resp, err := http.Get("https://www.googleapis.com/oauth2/v2/userinfo?access_token=" + token.AccessToken)
 	if err != nil {
 		log.Printf("Error while fetching user info: %s", err.Error())
-		return c.Redirect("/")
+		http.Redirect(w, r, "/", http.StatusTemporaryRedirect)
+		return
 	}
 	defer resp.Body.Close()
 
-	var userInfo map[string]interface{}
-	if err := json.NewDecoder(resp.Body).Decode(&userInfo); err != nil {
-		log.Printf("Error parsing user info: %s", err.Error())
-		return c.Redirect("/")
+	content, err := ioutil.ReadAll(resp.Body)
+	if err != nil {
+		log.Printf("Error reading response: %s", err.Error())
+		http.Redirect(w, r, "/", http.StatusTemporaryRedirect)
+		return
 	}
 
+	// Convert JSON response to structure
+	var userInfo map[string]interface{}
+	if err := json.Unmarshal(content, &userInfo); err != nil {
+		log.Printf("Error parsing user info: %s", err.Error())
+		http.Redirect(w, r, "/", http.StatusTemporaryRedirect)
+		return
+	}
+
+	// Extract user info with type assertion
 	googleID, ok := userInfo["id"].(string)
 	if !ok {
 		log.Println("Error extracting Google ID")
-		return c.Redirect("/")
+		http.Redirect(w, r, "/", http.StatusTemporaryRedirect)
+		return
 	}
 
 	email, ok := userInfo["email"].(string)
 	if !ok {
 		log.Println("Error extracting email")
-		return c.Redirect("/")
+		http.Redirect(w, r, "/", http.StatusTemporaryRedirect)
+		return
 	}
 
 	firstName, ok := userInfo["given_name"].(string)
 	if !ok {
 		log.Println("Error extracting first name")
-		return c.Redirect("/")
+		http.Redirect(w, r, "/", http.StatusTemporaryRedirect)
+		return
 	}
 
 	lastName, ok := userInfo["family_name"].(string)
 	if !ok {
 		log.Println("Error extracting last name")
-		return c.Redirect("/")
+		http.Redirect(w, r, "/", http.StatusTemporaryRedirect)
+		return
 	}
 
-	// Проверка существования пользователя в базе данных
+	// Проверка, существует ли пользователь с таким email
 	var user users.User
 	if err := config.DB.Where("email = ?", email).First(&user).Error; err != nil {
+		// Если пользователь не найден, создаем нового
 		if err == gorm.ErrRecordNotFound {
-			log.Printf("User with email %s not found, creating a new one", email)
+			log.Printf("Пользователь с email %s не найден, создаем нового", email)
 			user = users.User{
 				Email:       email,
 				Name:        firstName + " " + lastName,
@@ -108,20 +129,23 @@ func HandleGoogleCallback(c *fiber.Ctx) error {
 				AccessToken: token.AccessToken,
 			}
 			if err := config.DB.Create(&user).Error; err != nil {
-				log.Printf("Error creating user: %v", err)
-				return c.Status(fiber.StatusInternalServerError).SendString("Error creating user")
+				log.Printf("Ошибка при создании пользователя: %v", err)
+				http.Error(w, "Ошибка создания пользователя", http.StatusInternalServerError)
+				return
 			}
 		} else {
-			log.Printf("Error finding user with email %s: %v", email, err)
-			return c.Status(fiber.StatusInternalServerError).SendString("Error finding user")
+			log.Printf("Ошибка при попытке найти пользователя с email %s: %v", email, err)
+			http.Error(w, "Ошибка поиска пользователя", http.StatusInternalServerError)
+			return
 		}
 	}
 
-	// Проверка или создание GoogleUser
+	// Проверка в таблице GoogleUser
 	var googleUser users.GoogleUser
 	if err := config.DB.Where("google_id = ?", googleID).First(&googleUser).Error; err != nil {
+		// Если GoogleUser не найден, создаем нового
 		if err == gorm.ErrRecordNotFound {
-			log.Printf("GoogleUser with ID %s not found, creating a new one", googleID)
+			log.Printf("GoogleUser с ID %s не найден, создаем нового", googleID)
 			googleUser = users.GoogleUser{
 				UserID:      user.ID,
 				GoogleID:    googleID,
@@ -131,30 +155,44 @@ func HandleGoogleCallback(c *fiber.Ctx) error {
 				AccessToken: token.AccessToken,
 			}
 			if err := config.DB.Create(&googleUser).Error; err != nil {
-				log.Printf("Error creating GoogleUser: %v", err)
-				return c.Status(fiber.StatusInternalServerError).SendString("Error creating GoogleUser")
+				log.Printf("Ошибка при создании GoogleUser: %v", err)
+				http.Error(w, "Ошибка создания GoogleUser", http.StatusInternalServerError)
+				return
 			}
 		} else {
-			log.Printf("Error finding GoogleUser with Google ID %s: %v", googleID, err)
-			return c.Status(fiber.StatusInternalServerError).SendString("Error finding GoogleUser")
+			log.Printf("Ошибка при попытке найти GoogleUser с Google ID %s: %v", googleID, err)
+			http.Error(w, "Ошибка поиска GoogleUser", http.StatusInternalServerError)
+			return
 		}
 	} else {
+		// Если GoogleUser найден, обновляем информацию
 		googleUser.Email = email
 		googleUser.FirstName = firstName
 		googleUser.LastName = lastName
 		googleUser.AccessToken = token.AccessToken
 		if err := config.DB.Save(&googleUser).Error; err != nil {
-			log.Printf("Error updating GoogleUser: %v", err)
-			return c.Status(fiber.StatusInternalServerError).SendString("Error updating GoogleUser")
+			log.Printf("Ошибка при обновлении GoogleUser: %v", err)
+			http.Error(w, "Ошибка обновления GoogleUser", http.StatusInternalServerError)
+			return
 		}
 	}
 
-	// Сохранение данных пользователя в сессии
-	sess.Set("user_id", user.ID)
-	if err := sess.Save(); err != nil {
-		log.Printf("Error saving session: %s", err.Error())
-		return c.Status(fiber.StatusInternalServerError).SendString("Error saving session")
+	// Сохраняем минимальные данные пользователя в сессии (например, только ID)
+	session, err := store.Get(r, "session-name")
+	if err != nil {
+		log.Printf("Ошибка при получении сессии: %s", err.Error())
+		http.Error(w, "Ошибка получения сессии", http.StatusInternalServerError)
+		return
 	}
 
-	return c.Redirect("/welcome")
+	session.Values["user_id"] = user.ID // Сохраняем только ID пользователя
+	err = session.Save(r, w)
+	if err != nil {
+		log.Printf("Ошибка при сохранении сессии: %s", err.Error())
+		http.Error(w, "Ошибка сохранения сессии", http.StatusInternalServerError)
+		return
+	}
+
+	// Перенаправляем пользователя на защищенную страницу
+	http.Redirect(w, r, "/welcome", http.StatusTemporaryRedirect)
 }

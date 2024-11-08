@@ -82,8 +82,8 @@ func main() {
 	http.HandleFunc("/stories/archive", controllers.ArchiveStory) // Параметр id передается как query параметр
 
 	// Настройка маршрутов
-	http.HandleFunc("/mentors", controllers.CreateMentorProfile)
-	http.HandleFunc("/mentors", controllers.GetMentors)
+	http.HandleFunc("/create/mentors", controllers.CreateMentorProfile)
+	http.HandleFunc("/get/mentors", controllers.GetMentors)
 	http.HandleFunc("/sessions", controllers.CreateMentorshipSession)
 	http.HandleFunc("/sessions/:id/status", controllers.UpdateSessionStatus)
 

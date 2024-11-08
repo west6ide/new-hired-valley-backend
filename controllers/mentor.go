@@ -2,35 +2,45 @@ package controllers
 
 import (
 	"encoding/json"
+	"github.com/dgrijalva/jwt-go"
 	"hired-valley-backend/config"
+	"hired-valley-backend/controllers/authentication"
 	"hired-valley-backend/models/users"
 	"net/http"
 	"strconv"
 	"strings"
 )
 
+// Создание профиля наставника
 func CreateMentorProfile(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
 
-	// Получение ID авторизованного пользователя из сессии или токена
-	session, err := config.Store.Get(r, "session-name")
-	if err != nil {
-		http.Error(w, "Could not retrieve session", http.StatusUnauthorized)
+	// Получение ID авторизованного пользователя из токена
+	authHeader := r.Header.Get("Authorization")
+	if authHeader == "" {
+		http.Error(w, "Authorization header required", http.StatusUnauthorized)
 		return
 	}
 
-	userID, ok := session.Values["user_id"].(uint)
-	if !ok {
-		http.Error(w, "User not authenticated", http.StatusUnauthorized)
+	// Убираем "Bearer " из начала заголовка
+	tokenString := strings.TrimPrefix(authHeader, "Bearer ")
+	claims := &authentication.Claims{}
+
+	token, err := jwt.ParseWithClaims(tokenString, claims, func(token *jwt.Token) (interface{}, error) {
+		return authentication.JwtKey, nil
+	})
+
+	if err != nil || !token.Valid {
+		http.Error(w, "Invalid token", http.StatusUnauthorized)
 		return
 	}
 
 	// Проверка, что пользователь имеет роль наставника
 	var user users.User
-	if err := config.DB.First(&user, userID).Error; err != nil {
+	if err := config.DB.First(&user, claims.UserID).Error; err != nil {
 		http.Error(w, "User not found", http.StatusUnauthorized)
 		return
 	}
@@ -59,7 +69,7 @@ func CreateMentorProfile(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(profile)
 }
 
-// Найти наставников по фильтрам
+// Получить наставников по фильтрам
 func GetMentors(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)

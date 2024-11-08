@@ -19,7 +19,7 @@ var JwtKey = []byte(os.Getenv("JWT_SECRET")) // Инициализация jwtKe
 type Claims struct {
 	Email  string `json:"email"`
 	Role   string `json:"role"`
-	UserID uint   `gorm:"primaryKey"` // Добавляем поле Role
+	UserID uint   `gorm:"primaryKey"`
 	jwt.StandardClaims
 }
 
@@ -49,9 +49,9 @@ func Register(w http.ResponseWriter, r *http.Request) {
 	user.Password = string(hashedPassword)
 	user.Provider = "local" // Устанавливаем провайдер как "local" для обычной регистрации
 
-	// Валидация роли: только 'user' или 'instructor'
+	// Валидация роли: только 'user' или 'mentor'
 	if user.Role != "user" && user.Role != "mentor" {
-		http.Error(w, "Invalid role. Allowed roles: user, instructor", http.StatusBadRequest)
+		http.Error(w, "Invalid role. Allowed roles: user, mentor", http.StatusBadRequest)
 		return
 	}
 
@@ -117,9 +117,9 @@ func Login(w http.ResponseWriter, r *http.Request) {
 	// Создание JWT токена
 	expirationTime := time.Now().Add(24 * time.Hour)
 	claims := &Claims{
-		UserID: user.ID, // Добавляем UserID
+		UserID: user.ID,
 		Email:  user.Email,
-		Role:   user.Role, // Не забываем добавить роль
+		Role:   user.Role,
 		StandardClaims: jwt.StandardClaims{
 			ExpiresAt: expirationTime.Unix(),
 		},

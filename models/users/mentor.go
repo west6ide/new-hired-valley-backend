@@ -6,19 +6,19 @@ import (
 
 // Модель наставника
 type MentorProfile struct {
-	ID              uint           `gorm:"primaryKey" json:"id"`
-	UserID          uint           `gorm:"uniqueIndex" json:"user_id"` // Связь с таблицей пользователей
-	Name            string         `gorm:"size:255;not null" json:"name"`
-	Specialization  string         `gorm:"size:255" json:"specialization"`
-	Industry        string         `gorm:"size:255" json:"industry"`
-	ExperienceYears int            `gorm:"not null" json:"experience_years"`
-	HourlyRate      float64        `gorm:"not null" json:"hourly_rate"`
-	Bio             string         `gorm:"type:text" json:"bio"`
-	Availability    []Availability `gorm:"foreignKey:MentorID" json:"availability"`
-	Reviews         []Review       `gorm:"foreignKey:MentorID" json:"reviews"`
-	AverageRating   float64        `gorm:"-" json:"average_rating"` // Поле для среднего рейтинга (вычисляемое)
-	CreatedAt       time.Time      `json:"created_at"`
-	UpdatedAt       time.Time      `json:"updated_at"`
+	ID              uint           `gorm:"primaryKey"`
+	UserID          uint           `gorm:"uniqueIndex"`       // Связь с таблицей пользователей
+	User            User           `gorm:"foreignKey:UserID"` // Связь с моделью User
+	Specialization  string         `gorm:"size:255"`
+	Industry        string         `gorm:"size:255"`
+	ExperienceYears int            `gorm:"not null"`
+	HourlyRate      float64        `gorm:"not null"`
+	Bio             string         `gorm:"type:text"`
+	Availability    []Availability `gorm:"foreignKey:MentorID"`
+	Reviews         []Review       `gorm:"foreignKey:MentorID"`
+	AverageRating   float64        `gorm:"-"` // Поле для среднего рейтинга (вычисляемое)
+	CreatedAt       time.Time
+	UpdatedAt       time.Time
 }
 
 // Модель сеанса наставничества

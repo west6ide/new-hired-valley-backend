@@ -9,18 +9,46 @@ import (
 	"strings"
 )
 
-// Создать профиль наставника
 func CreateMentorProfile(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
 
+	// Получение ID авторизованного пользователя из сессии или токена
+	session, err := config.Store.Get(r, "session-name")
+	if err != nil {
+		http.Error(w, "Could not retrieve session", http.StatusUnauthorized)
+		return
+	}
+
+	userID, ok := session.Values["user_id"].(uint)
+	if !ok {
+		http.Error(w, "User not authenticated", http.StatusUnauthorized)
+		return
+	}
+
+	// Проверка, что пользователь имеет роль наставника
+	var user users.User
+	if err := config.DB.First(&user, userID).Error; err != nil {
+		http.Error(w, "User not found", http.StatusUnauthorized)
+		return
+	}
+
+	if user.Role != "mentor" {
+		http.Error(w, "Only mentors can create a mentor profile", http.StatusForbidden)
+		return
+	}
+
+	// Создание профиля наставника, если роль пользователя - "mentor"
 	var profile users.MentorProfile
 	if err := json.NewDecoder(r.Body).Decode(&profile); err != nil {
 		http.Error(w, "Invalid request", http.StatusBadRequest)
 		return
 	}
+
+	// Присваиваем профильному полю UserID значение из авторизованного пользователя
+	profile.UserID = user.ID
 
 	if err := config.DB.Create(&profile).Error; err != nil {
 		http.Error(w, "Could not create mentor profile", http.StatusInternalServerError)

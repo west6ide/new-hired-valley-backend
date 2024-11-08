@@ -35,8 +35,8 @@ type MentorshipSession struct {
 type Availability struct {
 	ID        uint `gorm:"primaryKey"`
 	MentorID  uint
-	StartTime time.Time
-	EndTime   time.Time
+	StartTime time.Time `gorm:"not null"` // Обязательно для сохранения
+	EndTime   time.Time `gorm:"not null"` // Обязательно для сохранения
 }
 
 // Модель отзывов

@@ -96,21 +96,19 @@ func GetMentors(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(mentors)
 }
 
-// Создание сеанса наставничества
-func CreateMentorshipSession(w http.ResponseWriter, r *http.Request) {
+// Создание доступности для наставника
+func CreateAvailability(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
 
-	// Получение токена из заголовка Authorization
 	authHeader := r.Header.Get("Authorization")
 	if authHeader == "" {
 		http.Error(w, "Authorization header required", http.StatusUnauthorized)
 		return
 	}
 
-	// Убираем "Bearer " из начала заголовка
 	tokenString := strings.TrimPrefix(authHeader, "Bearer ")
 	claims := &authentication.Claims{}
 
@@ -123,7 +121,59 @@ func CreateMentorshipSession(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Создание сеанса наставничества
+	var user users.User
+	if err := config.DB.First(&user, claims.UserID).Error; err != nil {
+		http.Error(w, "User not found", http.StatusUnauthorized)
+		return
+	}
+
+	if user.Role != "mentor" {
+		http.Error(w, "Only mentors can create availability", http.StatusForbidden)
+		return
+	}
+
+	var availability users.Availability
+	if err := json.NewDecoder(r.Body).Decode(&availability); err != nil {
+		http.Error(w, "Invalid request", http.StatusBadRequest)
+		return
+	}
+
+	availability.MentorID = user.ID
+
+	if err := config.DB.Create(&availability).Error; err != nil {
+		http.Error(w, "Could not create availability", http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(availability)
+}
+
+// Создание сеанса наставничества
+func CreateMentorshipSession(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	authHeader := r.Header.Get("Authorization")
+	if authHeader == "" {
+		http.Error(w, "Authorization header required", http.StatusUnauthorized)
+		return
+	}
+
+	tokenString := strings.TrimPrefix(authHeader, "Bearer ")
+	claims := &authentication.Claims{}
+
+	token, err := jwt.ParseWithClaims(tokenString, claims, func(token *jwt.Token) (interface{}, error) {
+		return authentication.JwtKey, nil
+	})
+
+	if err != nil || !token.Valid {
+		http.Error(w, "Invalid token", http.StatusUnauthorized)
+		return
+	}
+
 	var session users.MentorshipSession
 	if err := json.NewDecoder(r.Body).Decode(&session); err != nil {
 		http.Error(w, "Invalid request", http.StatusBadRequest)
@@ -137,10 +187,8 @@ func CreateMentorshipSession(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Присваиваем ID пользователя, который создает сеанс
 	session.UserID = claims.UserID
 
-	// Создание записи о сеансе в базе данных
 	if err := config.DB.Create(&session).Error; err != nil {
 		http.Error(w, "Could not create session", http.StatusInternalServerError)
 		return

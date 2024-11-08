@@ -2,7 +2,6 @@ package main
 
 import (
 	"fmt"
-	"github.com/gofiber/fiber/v2"
 	"hired-valley-backend/config"
 	"hired-valley-backend/controllers"
 	"hired-valley-backend/controllers/authentication"
@@ -20,8 +19,6 @@ func main() {
 	if port == "" {
 		port = "8080" // Устанавливаем порт по умолчанию
 	}
-
-	app := fiber.New()
 
 	// Инициализируем базу данных
 	err := config.InitDB()
@@ -85,10 +82,10 @@ func main() {
 	http.HandleFunc("/stories/archive", controllers.ArchiveStory) // Параметр id передается как query параметр
 
 	// Настройка маршрутов
-	app.Post("/mentors", controllers.CreateMentorProfile)
-	app.Get("/mentors", controllers.GetMentors)
-	app.Post("/sessions", controllers.CreateMentorshipSession)
-	app.Patch("/sessions/:id/status", controllers.UpdateSessionStatus)
+	http.HandleFunc("/mentors", controllers.CreateMentorProfile)
+	http.HandleFunc("/mentors", controllers.GetMentors)
+	http.HandleFunc("/sessions", controllers.CreateMentorshipSession)
+	http.HandleFunc("/sessions/:id/status", controllers.UpdateSessionStatus)
 
 	// Запускаем сервер
 	log.Printf("Сервер запущен на порту %s", port)

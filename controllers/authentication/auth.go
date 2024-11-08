@@ -50,7 +50,7 @@ func Register(w http.ResponseWriter, r *http.Request) {
 	user.Provider = "local" // Устанавливаем провайдер как "local" для обычной регистрации
 
 	// Валидация роли: только 'user' или 'instructor'
-	if user.Role != "user" && user.Role != "instructor" {
+	if user.Role != "user" && user.Role != "mentor" {
 		http.Error(w, "Invalid role. Allowed roles: user, instructor", http.StatusBadRequest)
 		return
 	}

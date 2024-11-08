@@ -6,6 +6,7 @@ import (
 	"hired-valley-backend/controllers"
 	"hired-valley-backend/controllers/authentication"
 	"hired-valley-backend/controllers/course"
+	"hired-valley-backend/controllers/mentors"
 	"hired-valley-backend/models/courses"
 	"hired-valley-backend/models/users"
 	"log"
@@ -82,10 +83,11 @@ func main() {
 	http.HandleFunc("/stories/archive", controllers.ArchiveStory) // Параметр id передается как query параметр
 
 	// Настройка маршрутов
-	http.HandleFunc("/create/mentors", controllers.CreateMentorProfile)
-	http.HandleFunc("/get/mentors", controllers.GetMentors)
-	http.HandleFunc("/sessions", controllers.CreateMentorshipSession)
-	http.HandleFunc("/sessions/:id/status", controllers.UpdateSessionStatus)
+	http.HandleFunc("/create/mentors", mentors.CreateMentorProfile)
+	http.HandleFunc("/get/mentors", mentors.GetMentors)
+	http.HandleFunc("/sessions", mentors.CreateMentorshipSession)
+	http.HandleFunc("/sessions/:id/status", mentors.UpdateSessionStatus)
+	http.HandleFunc("/create/availability", mentors.CreateAvailability)
 
 	// Запускаем сервер
 	log.Printf("Сервер запущен на порту %s", port)

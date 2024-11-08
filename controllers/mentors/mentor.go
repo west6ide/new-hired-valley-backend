@@ -1,4 +1,4 @@
-package controllers
+package mentors
 
 import (
 	"encoding/json"

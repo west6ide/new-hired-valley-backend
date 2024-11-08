@@ -96,13 +96,34 @@ func GetMentors(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(mentors)
 }
 
-// Создать сеанс наставничества
+// Создание сеанса наставничества
 func CreateMentorshipSession(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
 
+	// Получение токена из заголовка Authorization
+	authHeader := r.Header.Get("Authorization")
+	if authHeader == "" {
+		http.Error(w, "Authorization header required", http.StatusUnauthorized)
+		return
+	}
+
+	// Убираем "Bearer " из начала заголовка
+	tokenString := strings.TrimPrefix(authHeader, "Bearer ")
+	claims := &authentication.Claims{}
+
+	token, err := jwt.ParseWithClaims(tokenString, claims, func(token *jwt.Token) (interface{}, error) {
+		return authentication.JwtKey, nil
+	})
+
+	if err != nil || !token.Valid {
+		http.Error(w, "Invalid token", http.StatusUnauthorized)
+		return
+	}
+
+	// Создание сеанса наставничества
 	var session users.MentorshipSession
 	if err := json.NewDecoder(r.Body).Decode(&session); err != nil {
 		http.Error(w, "Invalid request", http.StatusBadRequest)
@@ -116,6 +137,10 @@ func CreateMentorshipSession(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Присваиваем ID пользователя, который создает сеанс
+	session.UserID = claims.UserID
+
+	// Создание записи о сеансе в базе данных
 	if err := config.DB.Create(&session).Error; err != nil {
 		http.Error(w, "Could not create session", http.StatusInternalServerError)
 		return

@@ -187,7 +187,7 @@ func AuthMiddleware() gin.HandlerFunc {
 			return
 		}
 
-		// Проверка, что userID корректно получен из токена
+		// Логируем информацию для проверки
 		log.Printf("Authenticated user ID: %v, Role: %v", claims.UserID, claims.Role)
 
 		c.Set("userID", claims.UserID)

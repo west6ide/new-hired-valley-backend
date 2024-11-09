@@ -11,32 +11,31 @@ import (
 // CRUD для MentorProfile
 
 func CreateMentorProfile(c *gin.Context) {
-	var user users.User
-	userID := c.GetUint("userID") // Предполагается, что userID извлечён из токена аутентификации
+	userID, exists := c.Get("userID")
+	if !exists {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "User not authenticated"})
+		return
+	}
 
-	// Получаем пользователя из базы данных
+	var user users.User
 	if err := config.DB.First(&user, userID).Error; err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": "User not found"})
 		return
 	}
 
-	// Проверяем роль пользователя
 	if user.Role != "mentor" {
 		c.JSON(http.StatusForbidden, gin.H{"error": "Only mentors can create mentor profiles"})
 		return
 	}
 
-	// Создание профиля ментора
 	var profile users.MentorProfile
 	if err := c.ShouldBindJSON(&profile); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid request"})
 		return
 	}
 
-	// Устанавливаем связь с пользователем
 	profile.UserID = user.ID
 
-	// Сохранение профиля в базе данных
 	if err := config.DB.Create(&profile).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create mentor profile"})
 		return

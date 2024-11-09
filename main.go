@@ -81,16 +81,16 @@ func main() {
 	http.HandleFunc("/list/stories", controllers.GetActiveStories)
 	http.HandleFunc("/stories/archive", controllers.ArchiveStory) // Параметр id передается как query параметр
 
-	http.HandleFunc("/mentors", mentors.CreateMentorProfile)
-	http.HandleFunc("/mentors/:id", mentors.GetMentorProfile)
-	http.HandleFunc("/mentors/:id", mentors.UpdateMentorProfile)
-	http.HandleFunc("/mentors/:id", mentors.DeleteMentorProfile)
+	http.HandleFunc("/create/mentors", mentors.CreateMentorProfile)
+	http.HandleFunc("/get/mentors/:id", mentors.GetMentorProfile)
+	http.HandleFunc("/update/mentors/:id", mentors.UpdateMentorProfile)
+	http.HandleFunc("/delete/mentors/:id", mentors.DeleteMentorProfile)
 
 	// CRUD для AvailableTime (изменены маршруты, чтобы избежать конфликта)
-	http.HandleFunc("/mentors/:id/availability", mentors.AddAvailableTime)
-	http.HandleFunc("/mentors/:id/availability", mentors.GetAvailableTimes)
-	http.HandleFunc("/availability/:id", mentors.UpdateAvailableTime)
-	http.HandleFunc("/availability/:id", mentors.DeleteAvailableTime)
+	http.HandleFunc("/add/mentors/:id/availability", mentors.AddAvailableTime)
+	http.HandleFunc("/get/mentors/:id/availability", mentors.GetAvailableTimes)
+	http.HandleFunc("/update/availability/:id", mentors.UpdateAvailableTime)
+	http.HandleFunc("/delete/availability/:id", mentors.DeleteAvailableTime)
 
 	// Запускаем сервер
 	log.Printf("Сервер запущен на порту %s", port)

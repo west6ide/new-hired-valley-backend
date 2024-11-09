@@ -2,9 +2,10 @@ package main
 
 import (
 	"fmt"
-	"github.com/gin-gonic/gin"
 	"hired-valley-backend/config"
+	"hired-valley-backend/controllers"
 	"hired-valley-backend/controllers/authentication"
+	"hired-valley-backend/controllers/course"
 	"hired-valley-backend/controllers/mentors"
 	"hired-valley-backend/models/courses"
 	"hired-valley-backend/models/users"
@@ -19,8 +20,6 @@ func main() {
 	if port == "" {
 		port = "8080" // Устанавливаем порт по умолчанию
 	}
-
-	r := gin.Default()
 
 	// Инициализируем базу данных
 	err := config.InitDB()
@@ -58,57 +57,52 @@ func main() {
 		log.Println("Подключение к базе данных успешно")
 	}
 
-	r.GET("/", handleHome)
-	//http.HandleFunc("/login/google", authentication.HandleGoogleLogin)
-	//http.HandleFunc("/callback/google", authentication.HandleGoogleCallback)
-	//http.HandleFunc("/login/linkedin", authentication.HandleLinkedInLogin)
-	//http.HandleFunc("/callback/linkedin", authentication.HandleLinkedInCallback)
+	http.HandleFunc("/", handleHome)
+	http.HandleFunc("/login/google", authentication.HandleGoogleLogin)
+	http.HandleFunc("/callback/google", authentication.HandleGoogleCallback)
+	http.HandleFunc("/login/linkedin", authentication.HandleLinkedInLogin)
+	http.HandleFunc("/callback/linkedin", authentication.HandleLinkedInCallback)
 
-	// Защищенные маршруты с AuthMiddleware
+	http.HandleFunc("/register", authentication.Register)
+	http.HandleFunc("/login", authentication.Login)
+	http.HandleFunc("/profile", authentication.GetProfile)
+	http.HandleFunc("/logout", authentication.Logout)
 
-	r.POST("/register", authentication.Register)
-	r.POST("/login", authentication.Login)
-	r.GET("/profile", authentication.GetProfile)
-	r.POST("/logout", authentication.Logout)
+	http.HandleFunc("/profile/update", authentication.UpdateProfile)
+	http.HandleFunc("/users/search", authentication.SearchUsers)
 
-	auth := r.Group("/")
-	auth.Use(authentication.AuthMiddleware())
-	//http.HandleFunc("/profile/update", authentication.UpdateProfile)
-	//http.HandleFunc("/users/search", authentication.SearchUsers)
-	//
-	//http.HandleFunc("/list/courses", course.ListCourses)
-	//http.HandleFunc("/create/courses", course.CreateCourse)
-	//http.HandleFunc("/upload/video", course.UploadVideo)
-	//http.HandleFunc("/list/lessons", course.ListLessons)
-	//http.HandleFunc("/create/lessons", course.CreateLesson)
-	//
-	//http.HandleFunc("/create/stories", controllers.CreateStory)
-	//http.HandleFunc("/list/stories", controllers.GetActiveStories)
-	//http.HandleFunc("/stories/archive", controllers.ArchiveStory) // Параметр id передается как query параметр
-	auth.POST("/mentors", mentors.CreateMentorProfile)
-	auth.GET("/mentors/:id", mentors.GetMentorProfile)
-	auth.PUT("/mentors/:id", mentors.UpdateMentorProfile)
-	auth.DELETE("/mentors/:id", mentors.DeleteMentorProfile)
+	http.HandleFunc("/list/courses", course.ListCourses)
+	http.HandleFunc("/create/courses", course.CreateCourse)
+	http.HandleFunc("/upload/video", course.UploadVideo)
+	http.HandleFunc("/list/lessons", course.ListLessons)
+	http.HandleFunc("/create/lessons", course.CreateLesson)
+
+	http.HandleFunc("/create/stories", controllers.CreateStory)
+	http.HandleFunc("/list/stories", controllers.GetActiveStories)
+	http.HandleFunc("/stories/archive", controllers.ArchiveStory) // Параметр id передается как query параметр
+
+	http.HandleFunc("/mentors", mentors.CreateMentorProfile)
+	http.HandleFunc("/mentors/:id", mentors.GetMentorProfile)
+	http.HandleFunc("/mentors/:id", mentors.UpdateMentorProfile)
+	http.HandleFunc("/mentors/:id", mentors.DeleteMentorProfile)
 
 	// CRUD для AvailableTime (изменены маршруты, чтобы избежать конфликта)
-	auth.POST("/mentors/:id/availability", mentors.AddAvailableTime)
-	auth.GET("/mentors/:id/availability", mentors.GetAvailableTimes)
-	auth.PUT("/availability/:id", mentors.UpdateAvailableTime)
-	auth.DELETE("/availability/:id", mentors.DeleteAvailableTime)
+	http.HandleFunc("/mentors/:id/availability", mentors.AddAvailableTime)
+	http.HandleFunc("/mentors/:id/availability", mentors.GetAvailableTimes)
+	http.HandleFunc("/availability/:id", mentors.UpdateAvailableTime)
+	http.HandleFunc("/availability/:id", mentors.DeleteAvailableTime)
 
-	//// Запускаем сервер
-	//log.Printf("Сервер запущен на порту %s", port)
-	//err = http.ListenAndServe(":"+port, nil)
-	//if err != nil {
-	//	log.Fatalf("Ошибка запуска сервера: %v", err)
-	//}
+	// Запускаем сервер
+	log.Printf("Сервер запущен на порту %s", port)
+	err = http.ListenAndServe(":"+port, nil)
+	if err != nil {
+		log.Fatalf("Ошибка запуска сервера: %v", err)
+	}
 
-	r.Run(":" + port)
 }
 
-// Обработчик домашней страницы
-func handleHome(c *gin.Context) {
-	session, _ := config.Store.Get(c.Request, "session-name")
+func handleHome(w http.ResponseWriter, r *http.Request) {
+	session, _ := config.Store.Get(r, "session-name")
 	user := session.Values["user"]
 
 	if user != nil {
@@ -117,23 +111,29 @@ func handleHome(c *gin.Context) {
 			html := fmt.Sprintf(`<html><body>
 				<p>Добро пожаловать, %s!</p>
 				<a href="/logout">Выйти</a><br>
+				<form action="/google-logout" method="post">
+					<button type="submit">Выйти из Google</button>
+				</form>
 			</body></html>`, usr.FirstName)
-			c.Data(http.StatusOK, "text/html; charset=utf-8", []byte(html))
+			fmt.Fprint(w, html)
 		case users.LinkedInUser:
 			html := fmt.Sprintf(`<html><body>
 				<p>Добро пожаловать, %s!</p>
 				<a href="/logout">Выйти</a><br>
+				<form action="/linkedin-logout" method="post">
+					<button type="submit">Выйти из LinkedIn</button>
+				</form>
 			</body></html>`, usr.FirstName)
-			c.Data(http.StatusOK, "text/html; charset=utf-8", []byte(html))
+			fmt.Fprint(w, html)
 		default:
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Неизвестный тип пользователя"})
+			http.Error(w, "Неизвестный тип пользователя", http.StatusInternalServerError)
 		}
 	} else {
 		html := `<html><body>
                    <a href="/login/google">Войти через Google</a><br>
                    <a href="/login/linkedin">Войти через LinkedIn</a>
                  </body></html>`
-		c.Data(http.StatusOK, "text/html; charset=utf-8", []byte(html))
+		fmt.Fprint(w, html)
 	}
 }
 

@@ -1,179 +1,198 @@
 package mentors
 
 import (
-	"github.com/gin-gonic/gin"
+	"encoding/json"
 	"gorm.io/gorm"
 	"hired-valley-backend/config"
 	"hired-valley-backend/models/users"
 	"net/http"
+	"strings"
 )
 
-// CRUD для MentorProfile
+// Helper function to parse URL path parameters
+func getPathParam(path string, param string) string {
+	parts := strings.Split(path, "/")
+	for i, part := range parts {
+		if part == param && i+1 < len(parts) {
+			return parts[i+1]
+		}
+	}
+	return ""
+}
 
-func CreateMentorProfile(c *gin.Context) {
-	userID, exists := c.Get("userID")
-	if !exists {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "User not authenticated"})
+// CRUD Handlers for MentorProfile
+
+func CreateMentorProfile(w http.ResponseWriter, r *http.Request) {
+	userID := r.Header.Get("userID")
+	if userID == "" {
+		http.Error(w, "User not authenticated", http.StatusUnauthorized)
 		return
 	}
 
 	var user users.User
 	if err := config.DB.First(&user, userID).Error; err != nil {
-		c.JSON(http.StatusNotFound, gin.H{"error": "User not found"})
+		http.Error(w, "User not found", http.StatusNotFound)
 		return
 	}
 
 	if user.Role != "mentor" {
-		c.JSON(http.StatusForbidden, gin.H{"error": "Only mentors can create mentor profiles"})
+		http.Error(w, "Only mentors can create mentor profiles", http.StatusForbidden)
 		return
 	}
 
 	var profile users.MentorProfile
-	if err := c.ShouldBindJSON(&profile); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid request"})
+	if err := json.NewDecoder(r.Body).Decode(&profile); err != nil {
+		http.Error(w, "Invalid request", http.StatusBadRequest)
 		return
 	}
 
 	profile.UserID = user.ID
-
 	if err := config.DB.Create(&profile).Error; err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create mentor profile"})
+		http.Error(w, "Failed to create mentor profile", http.StatusInternalServerError)
 		return
 	}
 
-	c.JSON(http.StatusCreated, profile)
+	w.WriteHeader(http.StatusCreated)
+	json.NewEncoder(w).Encode(profile)
 }
 
-func GetMentorProfile(c *gin.Context) {
+func GetMentorProfile(w http.ResponseWriter, r *http.Request) {
+	id := getPathParam(r.URL.Path, "mentors")
 	var profile users.MentorProfile
-	id := c.Param("id")
 
 	if err := config.DB.Preload("Skills").Preload("Schedule").First(&profile, id).Error; err != nil {
 		if err == gorm.ErrRecordNotFound {
-			c.JSON(http.StatusNotFound, gin.H{"error": "Profile not found"})
+			http.Error(w, "Profile not found", http.StatusNotFound)
 			return
 		}
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to retrieve profile"})
+		http.Error(w, "Failed to retrieve profile", http.StatusInternalServerError)
 		return
 	}
 
-	c.JSON(http.StatusOK, profile)
+	w.WriteHeader(http.StatusOK)
+	json.NewEncoder(w).Encode(profile)
 }
 
-func UpdateMentorProfile(c *gin.Context) {
+func UpdateMentorProfile(w http.ResponseWriter, r *http.Request) {
+	id := getPathParam(r.URL.Path, "mentors")
 	var profile users.MentorProfile
-	id := c.Param("id")
 
 	if err := config.DB.First(&profile, id).Error; err != nil {
-		c.JSON(http.StatusNotFound, gin.H{"error": "Profile not found"})
+		http.Error(w, "Profile not found", http.StatusNotFound)
 		return
 	}
 
-	if err := c.ShouldBindJSON(&profile); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid request"})
+	if err := json.NewDecoder(r.Body).Decode(&profile); err != nil {
+		http.Error(w, "Invalid request", http.StatusBadRequest)
 		return
 	}
 
 	if err := config.DB.Save(&profile).Error; err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update profile"})
+		http.Error(w, "Failed to update profile", http.StatusInternalServerError)
 		return
 	}
 
-	c.JSON(http.StatusOK, profile)
+	w.WriteHeader(http.StatusOK)
+	json.NewEncoder(w).Encode(profile)
 }
 
-func DeleteMentorProfile(c *gin.Context) {
+func DeleteMentorProfile(w http.ResponseWriter, r *http.Request) {
+	id := getPathParam(r.URL.Path, "mentors")
 	var profile users.MentorProfile
-	id := c.Param("id")
 
 	if err := config.DB.First(&profile, id).Error; err != nil {
-		c.JSON(http.StatusNotFound, gin.H{"error": "Profile not found"})
+		http.Error(w, "Profile not found", http.StatusNotFound)
 		return
 	}
 
 	if err := config.DB.Delete(&profile).Error; err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to delete profile"})
+		http.Error(w, "Failed to delete profile", http.StatusInternalServerError)
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"message": "Profile deleted"})
+	w.WriteHeader(http.StatusOK)
+	json.NewEncoder(w).Encode(map[string]string{"message": "Profile deleted"})
 }
 
-// CRUD для AvailableTime
+// CRUD Handlers for AvailableTime
 
-func AddAvailableTime(c *gin.Context) {
+func AddAvailableTime(w http.ResponseWriter, r *http.Request) {
 	var availableTime users.AvailableTime
 
-	if err := c.ShouldBindJSON(&availableTime); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid request"})
+	if err := json.NewDecoder(r.Body).Decode(&availableTime); err != nil {
+		http.Error(w, "Invalid request", http.StatusBadRequest)
 		return
 	}
 
 	if availableTime.StartTime.After(availableTime.EndTime) {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Start time must be before end time"})
+		http.Error(w, "Start time must be before end time", http.StatusBadRequest)
 		return
 	}
 
 	if err := config.DB.Create(&availableTime).Error; err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create available time"})
+		http.Error(w, "Failed to create available time", http.StatusInternalServerError)
 		return
 	}
 
-	c.JSON(http.StatusCreated, availableTime)
+	w.WriteHeader(http.StatusCreated)
+	json.NewEncoder(w).Encode(availableTime)
 }
 
-func GetAvailableTimes(c *gin.Context) {
+func GetAvailableTimes(w http.ResponseWriter, r *http.Request) {
+	mentorID := getPathParam(r.URL.Path, "mentors")
 	var schedule []users.AvailableTime
-	mentorID := c.Param("mentorID")
 
 	if err := config.DB.Where("mentor_id = ?", mentorID).Find(&schedule).Error; err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to retrieve schedule"})
+		http.Error(w, "Failed to retrieve schedule", http.StatusInternalServerError)
 		return
 	}
 
-	c.JSON(http.StatusOK, schedule)
+	w.WriteHeader(http.StatusOK)
+	json.NewEncoder(w).Encode(schedule)
 }
 
-func UpdateAvailableTime(c *gin.Context) {
+func UpdateAvailableTime(w http.ResponseWriter, r *http.Request) {
+	id := getPathParam(r.URL.Path, "available-times")
 	var availableTime users.AvailableTime
-	id := c.Param("id")
 
 	if err := config.DB.First(&availableTime, id).Error; err != nil {
-		c.JSON(http.StatusNotFound, gin.H{"error": "Available time not found"})
+		http.Error(w, "Available time not found", http.StatusNotFound)
 		return
 	}
 
-	if err := c.ShouldBindJSON(&availableTime); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid request"})
+	if err := json.NewDecoder(r.Body).Decode(&availableTime); err != nil {
+		http.Error(w, "Invalid request", http.StatusBadRequest)
 		return
 	}
 
 	if availableTime.StartTime.After(availableTime.EndTime) {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Start time must be before end time"})
+		http.Error(w, "Start time must be before end time", http.StatusBadRequest)
 		return
 	}
 
 	if err := config.DB.Save(&availableTime).Error; err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update available time"})
+		http.Error(w, "Failed to update available time", http.StatusInternalServerError)
 		return
 	}
 
-	c.JSON(http.StatusOK, availableTime)
+	w.WriteHeader(http.StatusOK)
+	json.NewEncoder(w).Encode(availableTime)
 }
 
-func DeleteAvailableTime(c *gin.Context) {
+func DeleteAvailableTime(w http.ResponseWriter, r *http.Request) {
+	id := getPathParam(r.URL.Path, "available-times")
 	var availableTime users.AvailableTime
-	id := c.Param("id")
 
 	if err := config.DB.First(&availableTime, id).Error; err != nil {
-		c.JSON(http.StatusNotFound, gin.H{"error": "Available time not found"})
+		http.Error(w, "Available time not found", http.StatusNotFound)
 		return
 	}
 
 	if err := config.DB.Delete(&availableTime).Error; err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to delete available time"})
+		http.Error(w, "Failed to delete available time", http.StatusInternalServerError)
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"message": "Available time deleted"})
+	w.WriteHeader(http.StatusOK)
+	json.NewEncoder(w).Encode(map[string]string{"message": "Available time deleted"})
 }

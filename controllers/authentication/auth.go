@@ -187,7 +187,7 @@ func AuthMiddleware() gin.HandlerFunc {
 			return
 		}
 
-		// Логируем информацию для проверки
+		// Проверка и логирование аутентифицированного пользователя
 		log.Printf("Authenticated user ID: %v, Role: %v", claims.UserID, claims.Role)
 
 		c.Set("userID", claims.UserID)

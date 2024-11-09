@@ -85,15 +85,14 @@ func main() {
 	http.HandleFunc("/list/stories", controllers.GetActiveStories)
 	http.HandleFunc("/stories/archive", controllers.ArchiveStory) // Параметр id передается как query параметр
 
-	// CRUD для MentorProfile
 	r.POST("/mentors", mentors.CreateMentorProfile)
 	r.GET("/mentors/:id", mentors.GetMentorProfile)
 	r.PUT("/mentors/:id", mentors.UpdateMentorProfile)
 	r.DELETE("/mentors/:id", mentors.DeleteMentorProfile)
 
-	// CRUD для AvailableTime
-	r.POST("/mentors/:mentorID/availability", mentors.AddAvailableTime)
-	r.GET("/mentors/:mentorID/schedule", mentors.GetAvailableTimes)
+	// CRUD для AvailableTime (изменены маршруты, чтобы избежать конфликта)
+	r.POST("/mentors/:id/availability", mentors.AddAvailableTime)
+	r.GET("/mentors/:id/availability", mentors.GetAvailableTimes)
 	r.PUT("/availability/:id", mentors.UpdateAvailableTime)
 	r.DELETE("/availability/:id", mentors.DeleteAvailableTime)
 

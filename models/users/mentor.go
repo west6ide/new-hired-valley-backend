@@ -5,9 +5,9 @@ import (
 )
 
 type MentorProfile struct {
-	ID          uint            `gorm:"primaryKey"`
-	UserID      uint            `gorm:"uniqueIndex"` // Связь с моделью пользователя
-	Name        string          `gorm:"size:255;not null;default:'Unknown'"`
+	ID          uint `gorm:"primaryKey"`
+	UserID      uint `gorm:"uniqueIndex"` // Связь с моделью пользователя
+	User        User
 	PhotoURL    string          `gorm:"size:255"`
 	City        string          `gorm:"size:100"`
 	Position    string          `gorm:"size:100"`

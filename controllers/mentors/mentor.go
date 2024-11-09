@@ -26,13 +26,14 @@ func CreateMentorProfile(c *gin.Context) {
 		return
 	}
 
-	// Проверка прошла успешно, можно создавать профиль ментора
+	// Создание профиля ментора
 	var profile users.MentorProfile
 	if err := c.ShouldBindJSON(&profile); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid request"})
 		return
 	}
 
+	// Устанавливаем связь с пользователем
 	profile.UserID = user.ID
 
 	// Сохранение профиля в базе данных

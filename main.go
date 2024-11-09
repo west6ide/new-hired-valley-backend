@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"github.com/gin-gonic/gin"
 	"hired-valley-backend/config"
 	"hired-valley-backend/controllers"
 	"hired-valley-backend/controllers/authentication"
@@ -21,6 +22,8 @@ func main() {
 		port = "8080" // Устанавливаем порт по умолчанию
 	}
 
+	r := gin.Default()
+
 	// Инициализируем базу данных
 	err := config.InitDB()
 	if err != nil {
@@ -36,9 +39,9 @@ func main() {
 		&courses.Lesson{},
 		&users.Story{},
 		&users.MentorProfile{},
-		&users.MentorshipSession{},
-		&users.Availability{},
-		&users.Review{},
+		&users.MentorSkill{},
+		&users.AvailableTime{},
+		&users.SocialLinks{},
 	)
 	if err != nil {
 		log.Fatalf("Ошибка миграции базы данных: %v", err)
@@ -82,12 +85,17 @@ func main() {
 	http.HandleFunc("/list/stories", controllers.GetActiveStories)
 	http.HandleFunc("/stories/archive", controllers.ArchiveStory) // Параметр id передается как query параметр
 
-	// Настройка маршрутов
-	http.HandleFunc("/create/mentors", mentors.CreateMentorProfile)
-	http.HandleFunc("/get/mentors", mentors.GetMentors)
-	http.HandleFunc("/sessions", mentors.CreateMentorshipSession)
-	http.HandleFunc("/sessions/:id/status", mentors.UpdateSessionStatus)
-	http.HandleFunc("/create/availability", mentors.CreateAvailability)
+	// CRUD для MentorProfile
+	r.POST("/mentors", mentors.CreateMentorProfile)
+	r.GET("/mentors/:id", mentors.GetMentorProfile)
+	r.PUT("/mentors/:id", mentors.UpdateMentorProfile)
+	r.DELETE("/mentors/:id", mentors.DeleteMentorProfile)
+
+	// CRUD для AvailableTime
+	r.POST("/mentors/:mentorID/availability", mentors.AddAvailableTime)
+	r.GET("/mentors/:mentorID/schedule", mentors.GetAvailableTimes)
+	r.PUT("/availability/:id", mentors.UpdateAvailableTime)
+	r.DELETE("/availability/:id", mentors.DeleteAvailableTime)
 
 	// Запускаем сервер
 	log.Printf("Сервер запущен на порту %s", port)

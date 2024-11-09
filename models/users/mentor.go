@@ -4,47 +4,40 @@ import (
 	"time"
 )
 
-// Модель наставника
 type MentorProfile struct {
-	ID              uint           `gorm:"primaryKey"`
-	UserID          uint           `gorm:"uniqueIndex"`       // Связь с таблицей пользователей
-	User            User           `gorm:"foreignKey:UserID"` // Связь с моделью User
-	Specialization  string         `gorm:"size:255"`
-	Industry        string         `gorm:"size:255"`
-	ExperienceYears int            `gorm:"not null"`
-	HourlyRate      float64        `gorm:"not null"`
-	Bio             string         `gorm:"type:text"`
-	Availability    []Availability `gorm:"foreignKey:MentorID"`
-	Reviews         []Review       `gorm:"foreignKey:MentorID"`
-	AverageRating   float64        `gorm:"-"` // Поле для среднего рейтинга (вычисляемое)
-	CreatedAt       time.Time
-	UpdatedAt       time.Time
+	ID          uint            `gorm:"primaryKey"`
+	UserID      uint            `gorm:"uniqueIndex"` // Связь с моделью пользователя
+	Name        string          `gorm:"size:255;not null"`
+	PhotoURL    string          `gorm:"size:255"`
+	City        string          `gorm:"size:100"`
+	Position    string          `gorm:"size:100"`
+	Company     string          `gorm:"size:255"`
+	Skills      []MentorSkill   `gorm:"many2many:mentor_skills"`
+	Experience  string          `gorm:"type:text"`
+	Education   string          `gorm:"type:text"`
+	Services    string          `gorm:"type:text"`
+	Rating      float32         `gorm:"default:0"`
+	ReviewCount int             `gorm:"default:0"`
+	Schedule    []AvailableTime `gorm:"foreignKey:MentorID"`
+	SocialLinks SocialLinks     `gorm:"embedded"`
+	CreatedAt   time.Time
+	UpdatedAt   time.Time
 }
 
-// Модель сеанса наставничества
-type MentorshipSession struct {
-	ID       uint `gorm:"primaryKey"`
-	MentorID uint `gorm:"index"`
-	UserID   uint `gorm:"index"`
-	Date     time.Time
-	Status   string `gorm:"size:50;default:'Pending'"`
-	Review   string `gorm:"type:text"`
+type MentorSkill struct {
+	ID   uint   `gorm:"primaryKey"`
+	Name string `gorm:"size:100;unique;not null"`
 }
 
-// Модель доступности
-type Availability struct {
-	ID        uint `gorm:"primaryKey"`
-	MentorID  uint
-	StartTime time.Time `gorm:"not null"` // Обязательно для сохранения
-	EndTime   time.Time `gorm:"not null"` // Обязательно для сохранения
+type AvailableTime struct {
+	ID        uint      `gorm:"primaryKey"`
+	MentorID  uint      `gorm:"index"` // ForeignKey для связи с MentorProfile
+	StartTime time.Time `gorm:"not null"`
+	EndTime   time.Time `gorm:"not null"`
+	Mentor    MentorProfile
 }
 
-// Модель отзывов
-type Review struct {
-	ID        uint   `gorm:"primaryKey"`
-	MentorID  uint   `gorm:"index"`
-	UserID    uint   `gorm:"index"`    // пользователь, оставивший отзыв
-	Rating    int    `gorm:"not null"` // Рейтинг от 1 до 5
-	Comment   string `gorm:"type:text"`
-	CreatedAt time.Time
+type SocialLinks struct {
+	LinkedIn string `gorm:"size:255"`
+	Website  string `gorm:"size:255"`
 }

@@ -7,7 +7,7 @@ import (
 type MentorProfile struct {
 	ID          uint            `gorm:"primaryKey"`
 	UserID      uint            `gorm:"uniqueIndex"` // Связь с моделью пользователя
-	Name        string          `gorm:"size:255;not null"`
+	Name        string          `gorm:"size:255;not null;default:'Unknown'"`
 	PhotoURL    string          `gorm:"size:255"`
 	City        string          `gorm:"size:100"`
 	Position    string          `gorm:"size:100"`
@@ -26,7 +26,7 @@ type MentorProfile struct {
 
 type MentorSkill struct {
 	ID   uint   `gorm:"primaryKey"`
-	Name string `gorm:"size:100;unique;not null"`
+	Name string `gorm:"size:100;unique;not null;default:'Unknown'"`
 }
 
 type AvailableTime struct {

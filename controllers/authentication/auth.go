@@ -1,9 +1,8 @@
 package authentication
 
 import (
-	"encoding/json"
-	"fmt"
 	"github.com/dgrijalva/jwt-go"
+	"github.com/gin-gonic/gin"
 	"golang.org/x/crypto/bcrypt"
 	"hired-valley-backend/config"
 	"hired-valley-backend/models/users"
@@ -14,7 +13,7 @@ import (
 	"time"
 )
 
-var JwtKey = []byte(os.Getenv("JWT_SECRET")) // Инициализация jwtKey
+var JwtKey = []byte(os.Getenv("JWT_SECRET"))
 
 type Claims struct {
 	Email  string `json:"email"`
@@ -23,35 +22,35 @@ type Claims struct {
 	jwt.StandardClaims
 }
 
-// Register: Обычная регистрация с паролем и выбором роли
-func Register(w http.ResponseWriter, r *http.Request) {
+// Register: регистрация с паролем и выбором роли
+func Register(c *gin.Context) {
 	var user users.User
-	if err := json.NewDecoder(r.Body).Decode(&user); err != nil {
-		http.Error(w, "Invalid input", http.StatusBadRequest)
+	if err := c.ShouldBindJSON(&user); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid input"})
 		return
 	}
 
 	log.Printf("Попытка регистрации пользователя: %+v", user)
 
-	// Проверяем, существует ли пользователь с таким email и обычной авторизацией (provider = local)
+	// Проверка на существование пользователя с таким email
 	var existingUser users.User
 	if err := config.DB.Where("email = ? AND provider = ?", user.Email, "local").First(&existingUser).Error; err == nil {
-		http.Error(w, "Email already registered", http.StatusConflict)
+		c.JSON(http.StatusConflict, gin.H{"error": "Email already registered"})
 		return
 	}
 
 	// Хэшируем пароль
 	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(user.Password), bcrypt.DefaultCost)
 	if err != nil {
-		http.Error(w, "Error hashing password", http.StatusInternalServerError)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Error hashing password"})
 		return
 	}
 	user.Password = string(hashedPassword)
-	user.Provider = "local" // Устанавливаем провайдер как "local" для обычной регистрации
+	user.Provider = "local"
 
-	// Валидация роли: только 'user' или 'mentor'
+	// Валидация роли
 	if user.Role != "user" && user.Role != "mentor" {
-		http.Error(w, "Invalid role. Allowed roles: user, mentor", http.StatusBadRequest)
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid role. Allowed roles: user, mentor"})
 		return
 	}
 
@@ -69,52 +68,44 @@ func Register(w http.ResponseWriter, r *http.Request) {
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
 	tokenString, err := token.SignedString(JwtKey)
 	if err != nil {
-		http.Error(w, "Error generating token", http.StatusInternalServerError)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Error generating token"})
 		return
 	}
 
-	// Сохраняем пользователя и токен в базе данных
+	// Сохраняем пользователя и токен
 	user.AccessToken = tokenString
 	if err := config.DB.Create(&user).Error; err != nil {
-		log.Printf("Ошибка при создании пользователя в базе данных: %v", err)
-		log.Printf("Детали пользователя: %+v", user)
-		http.Error(w, fmt.Sprintf("Error creating user: %v", err), http.StatusInternalServerError)
+		log.Printf("Ошибка при создании пользователя: %v", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Error creating user"})
 		return
 	}
 
-	// Убираем токен из структуры пользователя перед отправкой
 	user.AccessToken = ""
-
-	// Возвращаем пользователя и токен отдельно
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]interface{}{
+	c.JSON(http.StatusCreated, gin.H{
 		"user":  user,
 		"token": tokenString,
 	})
 }
 
 // Login: Вход с паролем и генерация JWT
-func Login(w http.ResponseWriter, r *http.Request) {
+func Login(c *gin.Context) {
 	var inputUser users.User
-	if err := json.NewDecoder(r.Body).Decode(&inputUser); err != nil {
-		http.Error(w, "Invalid input", http.StatusBadRequest)
+	if err := c.ShouldBindJSON(&inputUser); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid input"})
 		return
 	}
 
 	var user users.User
-	// Поиск пользователя по email и провайдеру "local"
 	if err := config.DB.Where("email = ? AND provider = ?", inputUser.Email, "local").First(&user).Error; err != nil {
-		http.Error(w, "User not found", http.StatusUnauthorized)
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "User not found"})
 		return
 	}
 
-	// Проверка пароля
 	if err := bcrypt.CompareHashAndPassword([]byte(user.Password), []byte(inputUser.Password)); err != nil {
-		http.Error(w, "Invalid password", http.StatusUnauthorized)
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid password"})
 		return
 	}
 
-	// Создание JWT токена
 	expirationTime := time.Now().Add(24 * time.Hour)
 	claims := &Claims{
 		UserID: user.ID,
@@ -128,31 +119,27 @@ func Login(w http.ResponseWriter, r *http.Request) {
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
 	tokenString, err := token.SignedString(JwtKey)
 	if err != nil {
-		http.Error(w, "Error generating token", http.StatusInternalServerError)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Error generating token"})
 		return
 	}
 
-	// Обновляем токен в базе данных
 	user.AccessToken = tokenString
 	if err := config.DB.Save(&user).Error; err != nil {
-		http.Error(w, "Error updating user token", http.StatusInternalServerError)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Error updating user token"})
 		return
 	}
 
-	// Возвращаем токен клиенту
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]string{"token": tokenString})
+	c.JSON(http.StatusOK, gin.H{"token": tokenString})
 }
 
-// GetProfile: Получение профиля пользователя по токену
-func GetProfile(w http.ResponseWriter, r *http.Request) {
-	authHeader := r.Header.Get("Authorization")
+// GetProfile: Получение профиля по токену
+func GetProfile(c *gin.Context) {
+	authHeader := c.GetHeader("Authorization")
 	if authHeader == "" {
-		http.Error(w, "Authorization header required", http.StatusUnauthorized)
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Authorization header required"})
 		return
 	}
 
-	// Убираем "Bearer " из начала заголовка
 	tokenString := strings.TrimPrefix(authHeader, "Bearer ")
 	claims := &Claims{}
 
@@ -161,24 +148,20 @@ func GetProfile(w http.ResponseWriter, r *http.Request) {
 	})
 
 	if err != nil || !token.Valid {
-		http.Error(w, "Invalid token", http.StatusUnauthorized)
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid token"})
 		return
 	}
 
-	// Поиск пользователя по email из токена и провайдеру "local"
 	var user users.User
 	if err := config.DB.Where("email = ? AND provider = ?", claims.Email, "local").First(&user).Error; err != nil {
-		http.Error(w, "User not found", http.StatusUnauthorized)
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "User not found"})
 		return
 	}
 
-	// Возвращаем информацию о пользователе
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(user)
+	c.JSON(http.StatusOK, user)
 }
 
-// Logout: Инвалидировать сессию (удаление токена)
-func Logout(w http.ResponseWriter, r *http.Request) {
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]string{"message": "Logged out successfully"})
+// Logout: Завершение сеанса
+func Logout(c *gin.Context) {
+	c.JSON(http.StatusOK, gin.H{"message": "Logged out successfully"})
 }

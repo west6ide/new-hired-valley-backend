@@ -67,10 +67,10 @@ func main() {
 	http.HandleFunc("/login/linkedin", authentication.HandleLinkedInLogin)
 	http.HandleFunc("/callback/linkedin", authentication.HandleLinkedInCallback)
 
-	http.HandleFunc("/register", authentication.Register)
-	http.HandleFunc("/login", authentication.Login)
-	http.HandleFunc("/profile", authentication.GetProfile)
-	http.HandleFunc("/logout", authentication.Logout)
+	r.POST("/register", authentication.Register)
+	r.POST("/login", authentication.Login)
+	r.GET("/profile", authentication.GetProfile)
+	r.POST("/logout", authentication.Logout)
 
 	http.HandleFunc("/profile/update", authentication.UpdateProfile)
 	http.HandleFunc("/users/search", authentication.SearchUsers)

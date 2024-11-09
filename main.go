@@ -4,9 +4,7 @@ import (
 	"fmt"
 	"github.com/gin-gonic/gin"
 	"hired-valley-backend/config"
-	"hired-valley-backend/controllers"
 	"hired-valley-backend/controllers/authentication"
-	"hired-valley-backend/controllers/course"
 	"hired-valley-backend/controllers/mentors"
 	"hired-valley-backend/models/courses"
 	"hired-valley-backend/models/users"
@@ -60,32 +58,32 @@ func main() {
 		log.Println("Подключение к базе данных успешно")
 	}
 
-	// Настраиваем маршруты
+	r.GET("/", handleHome)
+	//http.HandleFunc("/login/google", authentication.HandleGoogleLogin)
+	//http.HandleFunc("/callback/google", authentication.HandleGoogleCallback)
+	//http.HandleFunc("/login/linkedin", authentication.HandleLinkedInLogin)
+	//http.HandleFunc("/callback/linkedin", authentication.HandleLinkedInCallback)
+
+	// Защищенные маршруты с AuthMiddleware
 	auth := r.Group("/")
 	auth.Use(authentication.AuthMiddleware())
-	http.HandleFunc("/", handleHome)
-	http.HandleFunc("/login/google", authentication.HandleGoogleLogin)
-	http.HandleFunc("/callback/google", authentication.HandleGoogleCallback)
-	http.HandleFunc("/login/linkedin", authentication.HandleLinkedInLogin)
-	http.HandleFunc("/callback/linkedin", authentication.HandleLinkedInCallback)
-
 	r.POST("/register", authentication.Register)
 	r.POST("/login", authentication.Login)
 	r.GET("/profile", authentication.GetProfile)
 	r.POST("/logout", authentication.Logout)
 
-	http.HandleFunc("/profile/update", authentication.UpdateProfile)
-	http.HandleFunc("/users/search", authentication.SearchUsers)
-
-	http.HandleFunc("/list/courses", course.ListCourses)
-	http.HandleFunc("/create/courses", course.CreateCourse)
-	http.HandleFunc("/upload/video", course.UploadVideo)
-	http.HandleFunc("/list/lessons", course.ListLessons)
-	http.HandleFunc("/create/lessons", course.CreateLesson)
-
-	http.HandleFunc("/create/stories", controllers.CreateStory)
-	http.HandleFunc("/list/stories", controllers.GetActiveStories)
-	http.HandleFunc("/stories/archive", controllers.ArchiveStory) // Параметр id передается как query параметр
+	//http.HandleFunc("/profile/update", authentication.UpdateProfile)
+	//http.HandleFunc("/users/search", authentication.SearchUsers)
+	//
+	//http.HandleFunc("/list/courses", course.ListCourses)
+	//http.HandleFunc("/create/courses", course.CreateCourse)
+	//http.HandleFunc("/upload/video", course.UploadVideo)
+	//http.HandleFunc("/list/lessons", course.ListLessons)
+	//http.HandleFunc("/create/lessons", course.CreateLesson)
+	//
+	//http.HandleFunc("/create/stories", controllers.CreateStory)
+	//http.HandleFunc("/list/stories", controllers.GetActiveStories)
+	//http.HandleFunc("/stories/archive", controllers.ArchiveStory) // Параметр id передается как query параметр
 
 	r.POST("/mentors", mentors.CreateMentorProfile)
 	r.GET("/mentors/:id", mentors.GetMentorProfile)
@@ -100,16 +98,17 @@ func main() {
 
 	r.Run()
 
-	// Запускаем сервер
-	log.Printf("Сервер запущен на порту %s", port)
-	err = http.ListenAndServe(":"+port, nil)
-	if err != nil {
-		log.Fatalf("Ошибка запуска сервера: %v", err)
-	}
+	//// Запускаем сервер
+	//log.Printf("Сервер запущен на порту %s", port)
+	//err = http.ListenAndServe(":"+port, nil)
+	//if err != nil {
+	//	log.Fatalf("Ошибка запуска сервера: %v", err)
+	//}
 }
 
-func handleHome(w http.ResponseWriter, r *http.Request) {
-	session, _ := config.Store.Get(r, "session-name")
+// Обработчик домашней страницы
+func handleHome(c *gin.Context) {
+	session, _ := config.Store.Get(c.Request, "session-name")
 	user := session.Values["user"]
 
 	if user != nil {
@@ -118,29 +117,23 @@ func handleHome(w http.ResponseWriter, r *http.Request) {
 			html := fmt.Sprintf(`<html><body>
 				<p>Добро пожаловать, %s!</p>
 				<a href="/logout">Выйти</a><br>
-				<form action="/google-logout" method="post">
-					<button type="submit">Выйти из Google</button>
-				</form>
 			</body></html>`, usr.FirstName)
-			fmt.Fprint(w, html)
+			c.Data(http.StatusOK, "text/html; charset=utf-8", []byte(html))
 		case users.LinkedInUser:
 			html := fmt.Sprintf(`<html><body>
 				<p>Добро пожаловать, %s!</p>
 				<a href="/logout">Выйти</a><br>
-				<form action="/linkedin-logout" method="post">
-					<button type="submit">Выйти из LinkedIn</button>
-				</form>
 			</body></html>`, usr.FirstName)
-			fmt.Fprint(w, html)
+			c.Data(http.StatusOK, "text/html; charset=utf-8", []byte(html))
 		default:
-			http.Error(w, "Неизвестный тип пользователя", http.StatusInternalServerError)
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Неизвестный тип пользователя"})
 		}
 	} else {
 		html := `<html><body>
                    <a href="/login/google">Войти через Google</a><br>
                    <a href="/login/linkedin">Войти через LinkedIn</a>
                  </body></html>`
-		fmt.Fprint(w, html)
+		c.Data(http.StatusOK, "text/html; charset=utf-8", []byte(html))
 	}
 }
 

@@ -96,6 +96,8 @@ func main() {
 	r.PUT("/availability/:id", mentors.UpdateAvailableTime)
 	r.DELETE("/availability/:id", mentors.DeleteAvailableTime)
 
+	r.Run()
+
 	// Запускаем сервер
 	log.Printf("Сервер запущен на порту %s", port)
 	err = http.ListenAndServe(":"+port, nil)

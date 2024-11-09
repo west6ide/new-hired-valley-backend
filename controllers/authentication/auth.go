@@ -165,3 +165,38 @@ func GetProfile(c *gin.Context) {
 func Logout(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"message": "Logged out successfully"})
 }
+
+func AuthMiddleware() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		// Извлекаем токен из заголовка Authorization
+		authHeader := c.GetHeader("Authorization")
+		if authHeader == "" {
+			c.JSON(http.StatusUnauthorized, gin.H{"error": "Authorization header required"})
+			c.Abort()
+			return
+		}
+
+		// Убираем "Bearer " из начала заголовка, оставляя только токен
+		tokenString := strings.TrimPrefix(authHeader, "Bearer ")
+		claims := &Claims{}
+
+		// Парсим токен
+		token, err := jwt.ParseWithClaims(tokenString, claims, func(token *jwt.Token) (interface{}, error) {
+			return JwtKey, nil
+		})
+
+		// Проверяем, валиден ли токен и не истёк ли он
+		if err != nil || !token.Valid {
+			c.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid or expired token"})
+			c.Abort()
+			return
+		}
+
+		// Сохраняем информацию из токена в контексте
+		c.Set("userID", claims.UserID)
+		c.Set("userRole", claims.Role)
+
+		// Переходим к следующему обработчику
+		c.Next()
+	}
+}

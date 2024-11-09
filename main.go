@@ -61,6 +61,8 @@ func main() {
 	}
 
 	// Настраиваем маршруты
+	auth := r.Group("/")
+	auth.Use(authentication.AuthMiddleware())
 	http.HandleFunc("/", handleHome)
 	http.HandleFunc("/login/google", authentication.HandleGoogleLogin)
 	http.HandleFunc("/callback/google", authentication.HandleGoogleCallback)

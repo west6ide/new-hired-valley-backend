@@ -2,7 +2,6 @@ package mentors
 
 import (
 	"encoding/json"
-	"gorm.io/gorm"
 	"hired-valley-backend/config"
 	"hired-valley-backend/models/users"
 	"net/http"
@@ -20,8 +19,7 @@ func getPathParam(path string, param string) string {
 	return ""
 }
 
-// CRUD Handlers for MentorProfile
-
+// CreateMentorProfile creates a mentor profile for users with the "mentor" role
 func CreateMentorProfile(w http.ResponseWriter, r *http.Request) {
 	userID := r.Header.Get("userID")
 	if userID == "" {
@@ -35,8 +33,9 @@ func CreateMentorProfile(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Проверка, что пользователь имеет роль "mentor"
 	if user.Role != "mentor" {
-		http.Error(w, "Only mentors can create mentor profiles", http.StatusForbidden)
+		http.Error(w, "Only users with the mentor role can create mentor profiles", http.StatusForbidden)
 		return
 	}
 
@@ -46,6 +45,7 @@ func CreateMentorProfile(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Устанавливаем связь профиля ментора с пользователем
 	profile.UserID = user.ID
 	if err := config.DB.Create(&profile).Error; err != nil {
 		http.Error(w, "Failed to create mentor profile", http.StatusInternalServerError)
@@ -56,16 +56,13 @@ func CreateMentorProfile(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(profile)
 }
 
+// GetMentorProfile retrieves a mentor profile by ID
 func GetMentorProfile(w http.ResponseWriter, r *http.Request) {
 	id := getPathParam(r.URL.Path, "mentors")
 	var profile users.MentorProfile
 
 	if err := config.DB.Preload("Skills").Preload("Schedule").First(&profile, id).Error; err != nil {
-		if err == gorm.ErrRecordNotFound {
-			http.Error(w, "Profile not found", http.StatusNotFound)
-			return
-		}
-		http.Error(w, "Failed to retrieve profile", http.StatusInternalServerError)
+		http.Error(w, "Profile not found", http.StatusNotFound)
 		return
 	}
 
@@ -73,6 +70,7 @@ func GetMentorProfile(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(profile)
 }
 
+// UpdateMentorProfile updates an existing mentor profile
 func UpdateMentorProfile(w http.ResponseWriter, r *http.Request) {
 	id := getPathParam(r.URL.Path, "mentors")
 	var profile users.MentorProfile
@@ -96,6 +94,7 @@ func UpdateMentorProfile(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(profile)
 }
 
+// DeleteMentorProfile deletes a mentor profile by ID
 func DeleteMentorProfile(w http.ResponseWriter, r *http.Request) {
 	id := getPathParam(r.URL.Path, "mentors")
 	var profile users.MentorProfile

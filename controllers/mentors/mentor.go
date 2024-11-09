@@ -6,6 +6,7 @@ import (
 	"hired-valley-backend/config"
 	"hired-valley-backend/controllers/authentication"
 	"hired-valley-backend/models/users"
+	"log"
 	"net/http"
 	"strconv"
 	"strings"
@@ -96,19 +97,21 @@ func GetMentors(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(mentors)
 }
 
-// Создание доступности для наставника
+// Создание доступности
 func CreateAvailability(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
 
+	// Получение токена из заголовка Authorization
 	authHeader := r.Header.Get("Authorization")
 	if authHeader == "" {
 		http.Error(w, "Authorization header required", http.StatusUnauthorized)
 		return
 	}
 
+	// Убираем "Bearer " из начала заголовка
 	tokenString := strings.TrimPrefix(authHeader, "Bearer ")
 	claims := &authentication.Claims{}
 
@@ -132,14 +135,20 @@ func CreateAvailability(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Создание доступности
 	var availability users.Availability
 	if err := json.NewDecoder(r.Body).Decode(&availability); err != nil {
 		http.Error(w, "Invalid request", http.StatusBadRequest)
 		return
 	}
 
+	// Логирование полученных значений
+	log.Printf("Доступность наставника ID %d с временем %s - %s", availability.MentorID, availability.StartTime, availability.EndTime)
+
+	// Присваиваем профильному полю MentorID значение из авторизованного пользователя
 	availability.MentorID = user.ID
 
+	// Сохранение доступности в базе данных
 	if err := config.DB.Create(&availability).Error; err != nil {
 		http.Error(w, "Could not create availability", http.StatusInternalServerError)
 		return

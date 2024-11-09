@@ -71,6 +71,8 @@ func main() {
 	r.GET("/profile", authentication.GetProfile)
 	r.POST("/logout", authentication.Logout)
 
+	auth := r.Group("/")
+	auth.Use(authentication.AuthMiddleware())
 	//http.HandleFunc("/profile/update", authentication.UpdateProfile)
 	//http.HandleFunc("/users/search", authentication.SearchUsers)
 	//
@@ -83,8 +85,6 @@ func main() {
 	//http.HandleFunc("/create/stories", controllers.CreateStory)
 	//http.HandleFunc("/list/stories", controllers.GetActiveStories)
 	//http.HandleFunc("/stories/archive", controllers.ArchiveStory) // Параметр id передается как query параметр
-	auth := r.Group("/")
-	auth.Use(authentication.AuthMiddleware())
 	auth.POST("/mentors", mentors.CreateMentorProfile)
 	auth.GET("/mentors/:id", mentors.GetMentorProfile)
 	auth.PUT("/mentors/:id", mentors.UpdateMentorProfile)
@@ -103,7 +103,6 @@ func main() {
 	//	log.Fatalf("Ошибка запуска сервера: %v", err)
 	//}
 
-	r.Run()
 }
 
 // Обработчик домашней страницы

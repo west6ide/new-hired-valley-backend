@@ -51,7 +51,7 @@ func CreateCourse(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Проверяем, что роль пользователя — instructor
-	if claims.Role != "instructor" {
+	if claims.Role != "mentor" {
 		http.Error(w, "Only instructors can create courses", http.StatusForbidden)
 		return
 	}

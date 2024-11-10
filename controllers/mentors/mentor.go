@@ -5,6 +5,7 @@ import (
 	"hired-valley-backend/config"
 	"hired-valley-backend/controllers/authentication"
 	"hired-valley-backend/models/users"
+	"log"
 	"net/http"
 	"strings"
 )
@@ -41,6 +42,8 @@ func CreateMentorProfile(w http.ResponseWriter, r *http.Request) {
 
 	profile.UserID = claims.UserID
 	if err := config.DB.Create(&profile).Error; err != nil {
+		// Добавьте логирование ошибки
+		log.Printf("Failed to create profile: %v", err)
 		http.Error(w, "Failed to create profile", http.StatusInternalServerError)
 		return
 	}

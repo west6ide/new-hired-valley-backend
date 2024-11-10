@@ -1,62 +1,49 @@
-package mentors
+package mentor
 
 import (
 	"encoding/json"
 	"hired-valley-backend/config"
 	"hired-valley-backend/controllers/authentication"
 	"hired-valley-backend/models/users"
-	"log"
 	"net/http"
+	"strconv"
 	"strings"
 )
 
-// Helper function to parse URL path parameters
-func getPathParam(path string, param string) string {
-	parts := strings.Split(path, "/")
-	for i, part := range parts {
-		if part == param && i+1 < len(parts) {
-			return parts[i+1]
-		}
-	}
-	return ""
+// Проверка, что пользователь является наставником
+func isMentor(role string) bool {
+	return role == "mentor"
 }
 
-// CreateMentorProfile creates a mentor profile for users with the "mentor" role
+// CreateMentorProfile — создание профиля наставника
 func CreateMentorProfile(w http.ResponseWriter, r *http.Request) {
 	claims, err := authentication.ValidateToken(r)
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusUnauthorized)
-		return
-	}
-
-	if claims.Role != "mentor" {
-		http.Error(w, "Only mentors can create profiles", http.StatusForbidden)
+	if err != nil || !isMentor(claims.Role) {
+		http.Error(w, "Unauthorized", http.StatusUnauthorized)
 		return
 	}
 
 	var profile users.MentorProfile
 	if err := json.NewDecoder(r.Body).Decode(&profile); err != nil {
-		http.Error(w, "Invalid request", http.StatusBadRequest)
+		http.Error(w, "Invalid input", http.StatusBadRequest)
 		return
 	}
 
 	profile.UserID = claims.UserID
 	if err := config.DB.Create(&profile).Error; err != nil {
-		// Добавьте логирование ошибки
-		log.Printf("Failed to create profile: %v", err)
-		http.Error(w, "Failed to create profile", http.StatusInternalServerError)
+		http.Error(w, "Error creating mentor profile", http.StatusInternalServerError)
 		return
 	}
 
-	w.WriteHeader(http.StatusCreated)
+	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(profile)
 }
 
-// GetMentorProfile retrieves a mentor profile by ID
+// GetMentorProfile — получение профиля наставника
 func GetMentorProfile(w http.ResponseWriter, r *http.Request) {
 	claims, err := authentication.ValidateToken(r)
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusUnauthorized)
+	if err != nil || !isMentor(claims.Role) {
+		http.Error(w, "Unauthorized", http.StatusUnauthorized)
 		return
 	}
 
@@ -66,15 +53,15 @@ func GetMentorProfile(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	w.WriteHeader(http.StatusOK)
+	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(profile)
 }
 
-// UpdateMentorProfile updates an existing mentor profile
+// UpdateMentorProfile — обновление профиля наставника
 func UpdateMentorProfile(w http.ResponseWriter, r *http.Request) {
 	claims, err := authentication.ValidateToken(r)
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusUnauthorized)
+	if err != nil || !isMentor(claims.Role) {
+		http.Error(w, "Unauthorized", http.StatusUnauthorized)
 		return
 	}
 
@@ -85,158 +72,133 @@ func UpdateMentorProfile(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := json.NewDecoder(r.Body).Decode(&profile); err != nil {
-		http.Error(w, "Invalid request", http.StatusBadRequest)
+		http.Error(w, "Invalid input", http.StatusBadRequest)
 		return
 	}
 
 	if err := config.DB.Save(&profile).Error; err != nil {
-		http.Error(w, "Failed to update profile", http.StatusInternalServerError)
+		http.Error(w, "Error updating profile", http.StatusInternalServerError)
 		return
 	}
 
-	w.WriteHeader(http.StatusOK)
+	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(profile)
 }
 
-// DeleteMentorProfile deletes a mentor profile by ID
+// DeleteMentorProfile — удаление профиля наставника
 func DeleteMentorProfile(w http.ResponseWriter, r *http.Request) {
 	claims, err := authentication.ValidateToken(r)
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusUnauthorized)
+	if err != nil || !isMentor(claims.Role) {
+		http.Error(w, "Unauthorized", http.StatusUnauthorized)
 		return
 	}
 
 	if err := config.DB.Where("user_id = ?", claims.UserID).Delete(&users.MentorProfile{}).Error; err != nil {
-		http.Error(w, "Failed to delete profile", http.StatusInternalServerError)
+		http.Error(w, "Error deleting profile", http.StatusInternalServerError)
 		return
 	}
 
-	w.WriteHeader(http.StatusOK)
-	json.NewEncoder(w).Encode(map[string]string{"message": "Profile deleted"})
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]string{"message": "Profile deleted successfully"})
 }
 
-// CRUD Handlers for AvailableTime
-// AddAvailableTime создает новый интервал доступности для ментора
-func AddAvailableTime(w http.ResponseWriter, r *http.Request) {
+// CreateAvailableTime — создание доступного времени для наставника
+func CreateAvailableTime(w http.ResponseWriter, r *http.Request) {
 	claims, err := authentication.ValidateToken(r)
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusUnauthorized)
+	if err != nil || !isMentor(claims.Role) {
+		http.Error(w, "Unauthorized", http.StatusUnauthorized)
 		return
 	}
 
-	if claims.Role != "mentor" {
-		http.Error(w, "Only mentors can add available times", http.StatusForbidden)
+	var timeSlot users.AvailableTime
+	if err := json.NewDecoder(r.Body).Decode(&timeSlot); err != nil {
+		http.Error(w, "Invalid input", http.StatusBadRequest)
 		return
 	}
 
-	var availableTime users.AvailableTime
-	if err := json.NewDecoder(r.Body).Decode(&availableTime); err != nil {
-		http.Error(w, "Invalid request", http.StatusBadRequest)
+	timeSlot.MentorID = claims.UserID
+	if err := config.DB.Create(&timeSlot).Error; err != nil {
+		http.Error(w, "Error creating available time", http.StatusInternalServerError)
 		return
 	}
 
-	// Устанавливаем связь с ментором
-	availableTime.MentorID = claims.UserID
-	if availableTime.StartTime.After(availableTime.EndTime) {
-		http.Error(w, "Start time must be before end time", http.StatusBadRequest)
-		return
-	}
-
-	if err := config.DB.Create(&availableTime).Error; err != nil {
-		http.Error(w, "Failed to create available time", http.StatusInternalServerError)
-		return
-	}
-
-	w.WriteHeader(http.StatusCreated)
-	json.NewEncoder(w).Encode(availableTime)
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(timeSlot)
 }
 
-// GetAvailableTimes получает список доступных интервалов для ментора
+// GetAvailableTimes — получение всех доступных временных интервалов для наставника
 func GetAvailableTimes(w http.ResponseWriter, r *http.Request) {
 	claims, err := authentication.ValidateToken(r)
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusUnauthorized)
+	if err != nil || !isMentor(claims.Role) {
+		http.Error(w, "Unauthorized", http.StatusUnauthorized)
 		return
 	}
 
-	var schedule []users.AvailableTime
-	if err := config.DB.Where("mentor_id = ?", claims.UserID).Find(&schedule).Error; err != nil {
-		http.Error(w, "Failed to retrieve schedule", http.StatusInternalServerError)
+	var timeSlots []users.AvailableTime
+	if err := config.DB.Where("mentor_id = ?", claims.UserID).Find(&timeSlots).Error; err != nil {
+		http.Error(w, "No available times found", http.StatusNotFound)
 		return
 	}
 
-	w.WriteHeader(http.StatusOK)
-	json.NewEncoder(w).Encode(schedule)
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(timeSlots)
 }
 
-// UpdateAvailableTime обновляет существующий интервал доступности
+// UpdateAvailableTime — обновление временного интервала
 func UpdateAvailableTime(w http.ResponseWriter, r *http.Request) {
 	claims, err := authentication.ValidateToken(r)
+	if err != nil || !isMentor(claims.Role) {
+		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+		return
+	}
+
+	idStr := strings.TrimPrefix(r.URL.Path, "/mentor/available_times/")
+	id, err := strconv.Atoi(idStr)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusUnauthorized)
+		http.Error(w, "Invalid time slot ID", http.StatusBadRequest)
 		return
 	}
 
-	var availableTime users.AvailableTime
-	id := getPathParam(r.URL.Path, "available-times")
-
-	if err := config.DB.First(&availableTime, id).Error; err != nil {
-		http.Error(w, "Available time not found", http.StatusNotFound)
+	var timeSlot users.AvailableTime
+	if err := config.DB.Where("id = ? AND mentor_id = ?", id, claims.UserID).First(&timeSlot).Error; err != nil {
+		http.Error(w, "Time slot not found", http.StatusNotFound)
 		return
 	}
 
-	// Проверка, что интервал принадлежит текущему ментору
-	if availableTime.MentorID != claims.UserID {
-		http.Error(w, "You are not authorized to update this available time", http.StatusForbidden)
+	if err := json.NewDecoder(r.Body).Decode(&timeSlot); err != nil {
+		http.Error(w, "Invalid input", http.StatusBadRequest)
 		return
 	}
 
-	if err := json.NewDecoder(r.Body).Decode(&availableTime); err != nil {
-		http.Error(w, "Invalid request", http.StatusBadRequest)
+	if err := config.DB.Save(&timeSlot).Error; err != nil {
+		http.Error(w, "Error updating time slot", http.StatusInternalServerError)
 		return
 	}
 
-	if availableTime.StartTime.After(availableTime.EndTime) {
-		http.Error(w, "Start time must be before end time", http.StatusBadRequest)
-		return
-	}
-
-	if err := config.DB.Save(&availableTime).Error; err != nil {
-		http.Error(w, "Failed to update available time", http.StatusInternalServerError)
-		return
-	}
-
-	w.WriteHeader(http.StatusOK)
-	json.NewEncoder(w).Encode(availableTime)
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(timeSlot)
 }
 
-// DeleteAvailableTime удаляет существующий интервал доступности
+// DeleteAvailableTime — удаление временного интервала
 func DeleteAvailableTime(w http.ResponseWriter, r *http.Request) {
 	claims, err := authentication.ValidateToken(r)
+	if err != nil || !isMentor(claims.Role) {
+		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+		return
+	}
+
+	idStr := strings.TrimPrefix(r.URL.Path, "/mentor/available_times/")
+	id, err := strconv.Atoi(idStr)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusUnauthorized)
+		http.Error(w, "Invalid time slot ID", http.StatusBadRequest)
 		return
 	}
 
-	var availableTime users.AvailableTime
-	id := getPathParam(r.URL.Path, "available-times")
-
-	if err := config.DB.First(&availableTime, id).Error; err != nil {
-		http.Error(w, "Available time not found", http.StatusNotFound)
+	if err := config.DB.Where("id = ? AND mentor_id = ?", id, claims.UserID).Delete(&users.AvailableTime{}).Error; err != nil {
+		http.Error(w, "Error deleting time slot", http.StatusInternalServerError)
 		return
 	}
 
-	// Проверка, что интервал принадлежит текущему ментору
-	if availableTime.MentorID != claims.UserID {
-		http.Error(w, "You are not authorized to delete this available time", http.StatusForbidden)
-		return
-	}
-
-	if err := config.DB.Delete(&availableTime).Error; err != nil {
-		http.Error(w, "Failed to delete available time", http.StatusInternalServerError)
-		return
-	}
-
-	w.WriteHeader(http.StatusOK)
-	json.NewEncoder(w).Encode(map[string]string{"message": "Available time deleted"})
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]string{"message": "Time slot deleted successfully"})
 }

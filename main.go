@@ -6,7 +6,7 @@ import (
 	"hired-valley-backend/controllers"
 	"hired-valley-backend/controllers/authentication"
 	"hired-valley-backend/controllers/course"
-	"hired-valley-backend/controllers/mentors"
+	mentor "hired-valley-backend/controllers/mentors"
 	"hired-valley-backend/models/courses"
 	"hired-valley-backend/models/users"
 	"log"
@@ -81,16 +81,53 @@ func main() {
 	http.HandleFunc("/list/stories", controllers.GetActiveStories)
 	http.HandleFunc("/stories/archive", controllers.ArchiveStory) // Параметр id передается как query параметр
 
-	http.HandleFunc("/create/mentors", mentor.CreateMentorProfile)
-	http.HandleFunc("/get/mentors/:id", mentor.GetMentorProfile)
-	http.HandleFunc("/update/mentors/:id", mentor.UpdateMentorProfile)
-	http.HandleFunc("/delete/mentors/:id", mentor.DeleteMentorProfile)
+	//http.HandleFunc("/create/mentors", mentor.CreateMentorProfile)
+	//http.HandleFunc("/get/mentors/:id", mentor.GetMentorProfile)
+	//http.HandleFunc("/update/mentors/:id", mentor.UpdateMentorProfile)
+	//http.HandleFunc("/delete/mentors/:id", mentor.DeleteMentorProfile)
+	//
+	//// CRUD для AvailableTime (изменены маршруты, чтобы избежать конфликта)
+	//http.HandleFunc("/add/mentors/:id/availability", mentor.CreateAvailableTime)
+	//http.HandleFunc("/get/mentors/:id/availability", mentor.GetAvailableTimes)
+	//http.HandleFunc("/update/availability/:id", mentor.UpdateAvailableTime)
+	//http.HandleFunc("/delete/availability/:id", mentor.DeleteAvailableTime)
 
-	// CRUD для AvailableTime (изменены маршруты, чтобы избежать конфликта)
-	http.HandleFunc("/add/mentors/:id/availability", mentor.CreateAvailableTime)
-	http.HandleFunc("/get/mentors/:id/availability", mentor.GetAvailableTimes)
-	http.HandleFunc("/update/availability/:id", mentor.UpdateAvailableTime)
-	http.HandleFunc("/delete/availability/:id", mentor.DeleteAvailableTime)
+	http.HandleFunc("/mentor/profile", func(w http.ResponseWriter, r *http.Request) {
+		switch r.Method {
+		case http.MethodPost:
+			mentor.CreateMentorProfile(w, r)
+		case http.MethodGet:
+			mentor.GetMentorProfile(w, r)
+		case http.MethodPut:
+			mentor.UpdateMentorProfile(w, r)
+		case http.MethodDelete:
+			mentor.DeleteMentorProfile(w, r)
+		default:
+			http.Error(w, "Method Not Allowed", http.StatusMethodNotAllowed)
+		}
+	})
+
+	http.HandleFunc("/mentor/available_times", func(w http.ResponseWriter, r *http.Request) {
+		switch r.Method {
+		case http.MethodPost:
+			mentor.CreateAvailableTime(w, r)
+		case http.MethodGet:
+			mentor.GetAvailableTimes(w, r)
+		default:
+			http.Error(w, "Method Not Allowed", http.StatusMethodNotAllowed)
+		}
+	})
+
+	http.HandleFunc("/mentor/available_times/", func(w http.ResponseWriter, r *http.Request) {
+		switch r.Method {
+		case http.MethodPut:
+			mentor.UpdateAvailableTime(w, r)
+		case http.MethodDelete:
+			mentor.DeleteAvailableTime(w, r)
+		default:
+			http.Error(w, "Method Not Allowed", http.StatusMethodNotAllowed)
+		}
+	})
 
 	// Запускаем сервер
 	log.Printf("Сервер запущен на порту %s", port)

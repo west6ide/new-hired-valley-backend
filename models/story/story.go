@@ -1,14 +1,12 @@
 package story
 
 import (
-	"hired-valley-backend/models/users"
 	"time"
 )
 
 type Story struct {
-	ID         uint `gorm:"primaryKey"`
-	UserID     uint `gorm:"index"`
-	User       users.User
+	ID         uint       `gorm:"primaryKey"`
+	UserID     uint       `gorm:"index"`
 	ContentURL string     `gorm:"type:text"`      // Ссылка на медиафайл (фото или видео)
 	CreatedAt  time.Time  `gorm:"autoCreateTime"` // Время создания истории
 	ExpireAt   time.Time  // Время истечения истории
@@ -19,18 +17,16 @@ type Story struct {
 }
 
 type Reaction struct {
-	ID        uint `gorm:"primaryKey"`
-	StoryID   uint `gorm:"index"`
-	UserID    uint `gorm:"index"`
-	User      users.User
+	ID        uint      `gorm:"primaryKey"`
+	StoryID   uint      `gorm:"index"`
+	UserID    uint      `gorm:"index"`
 	Emoji     string    `gorm:"type:varchar(10)"` // Реакция (например, 😊, ❤️)
 	CreatedAt time.Time `gorm:"autoCreateTime"`
 }
 
 type ViewStory struct {
-	ID       uint `gorm:"primaryKey"`
-	StoryID  uint `gorm:"index"`
-	UserID   uint `gorm:"index"`
-	User     users.User
+	ID       uint      `gorm:"primaryKey"`
+	StoryID  uint      `gorm:"index"`
+	UserID   uint      `gorm:"index"`
 	ViewedAt time.Time `gorm:"autoCreateTime"`
 }

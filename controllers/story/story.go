@@ -2,40 +2,16 @@ package story
 
 import (
 	"encoding/json"
-	"errors"
 	"gorm.io/gorm"
+	"hired-valley-backend/controllers/authentication" // Импортируем authentication для проверки токенов
 	"hired-valley-backend/models/story"
 	"net/http"
 	"strconv"
-	"strings"
 	"time"
 )
 
-func authenticate(r *http.Request) (uint, error) {
-	authHeader := r.Header.Get("Authorization")
-	if authHeader == "" {
-		return 0, errors.New("authorization header missing")
-	}
-
-	// Проверка формата заголовка Authorization
-	parts := strings.Split(authHeader, " ")
-	if len(parts) != 2 || parts[0] != "Bearer" {
-		return 0, errors.New("invalid authorization header format")
-	}
-
-	token := parts[1]
-	// Проверка и извлечение userID из токена
-	// Здесь предполагается использование какой-либо библиотеки для проверки JWT токена.
-	// Для примера, считаем, что token == "valid-token" и привязываем userID = 1
-	if token == "valid-token" {
-		return 1, nil
-	}
-
-	return 0, errors.New("invalid token")
-}
-
 func CreateStory(w http.ResponseWriter, r *http.Request, db *gorm.DB) {
-	userID, err := authenticate(r)
+	claims, err := authentication.ValidateToken(r)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusUnauthorized)
 		return
@@ -46,28 +22,28 @@ func CreateStory(w http.ResponseWriter, r *http.Request, db *gorm.DB) {
 		return
 	}
 
-	var story story.Story
-	if err := json.NewDecoder(r.Body).Decode(&story); err != nil {
+	var newStory story.Story
+	if err := json.NewDecoder(r.Body).Decode(&newStory); err != nil {
 		http.Error(w, "Bad request", http.StatusBadRequest)
 		return
 	}
 
-	// Устанавливаем userID и время истечения
-	story.UserID = userID
-	story.CreatedAt = time.Now()
-	story.ExpireAt = story.CreatedAt.Add(24 * time.Hour)
+	// Устанавливаем userID из токена и время истечения истории
+	newStory.UserID = claims.UserID
+	newStory.CreatedAt = time.Now()
+	newStory.ExpireAt = newStory.CreatedAt.Add(24 * time.Hour)
 
-	if result := db.Create(&story); result.Error != nil {
+	if result := db.Create(&newStory); result.Error != nil {
 		http.Error(w, "Failed to create story", http.StatusInternalServerError)
 		return
 	}
 
 	w.WriteHeader(http.StatusCreated)
-	json.NewEncoder(w).Encode(story)
+	json.NewEncoder(w).Encode(newStory)
 }
 
 func GetUserStories(w http.ResponseWriter, r *http.Request, db *gorm.DB) {
-	userID, err := authenticate(r)
+	claims, err := authentication.ValidateToken(r)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusUnauthorized)
 		return
@@ -79,14 +55,14 @@ func GetUserStories(w http.ResponseWriter, r *http.Request, db *gorm.DB) {
 	}
 
 	var stories []story.Story
-	db.Where("user_id = ? AND expire_at > ? AND is_archived = ?", userID, time.Now(), false).Find(&stories)
+	db.Where("user_id = ? AND expire_at > ? AND is_archived = ?", claims.UserID, time.Now(), false).Find(&stories)
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(stories)
 }
 
 func ViewStory(w http.ResponseWriter, r *http.Request, db *gorm.DB) {
-	userID, err := authenticate(r)
+	claims, err := authentication.ValidateToken(r)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusUnauthorized)
 		return
@@ -104,27 +80,27 @@ func ViewStory(w http.ResponseWriter, r *http.Request, db *gorm.DB) {
 		return
 	}
 
-	var story story.Story
-	if result := db.First(&story, storyID); result.Error != nil {
+	var currentStory story.Story
+	if result := db.First(&currentStory, storyID); result.Error != nil {
 		http.Error(w, "Story not found", http.StatusNotFound)
 		return
 	}
 
 	// Проверка, что пользователь просматривает свою историю или она публичная
-	if story.UserID != userID && story.Privacy != "public" {
+	if currentStory.UserID != claims.UserID && currentStory.Privacy != "public" {
 		http.Error(w, "Forbidden", http.StatusForbidden)
 		return
 	}
 
-	story.Views += 1
-	db.Save(&story)
+	currentStory.Views += 1
+	db.Save(&currentStory)
 
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(story)
+	json.NewEncoder(w).Encode(currentStory)
 }
 
 func ArchiveStory(w http.ResponseWriter, r *http.Request, db *gorm.DB) {
-	userID, err := authenticate(r)
+	claims, err := authentication.ValidateToken(r)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusUnauthorized)
 		return
@@ -142,21 +118,21 @@ func ArchiveStory(w http.ResponseWriter, r *http.Request, db *gorm.DB) {
 		return
 	}
 
-	var story story.Story
-	if result := db.First(&story, storyID); result.Error != nil {
+	var currentStory story.Story
+	if result := db.First(&currentStory, storyID); result.Error != nil {
 		http.Error(w, "Story not found", http.StatusNotFound)
 		return
 	}
 
 	// Проверка, что пользователь архивирует свою собственную историю
-	if story.UserID != userID {
+	if currentStory.UserID != claims.UserID {
 		http.Error(w, "Forbidden", http.StatusForbidden)
 		return
 	}
 
-	story.IsArchived = true
-	db.Save(&story)
+	currentStory.IsArchived = true
+	db.Save(&currentStory)
 
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(story)
+	json.NewEncoder(w).Encode(currentStory)
 }

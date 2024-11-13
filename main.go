@@ -5,8 +5,9 @@ import (
 	"hired-valley-backend/config"
 	"hired-valley-backend/controllers/authentication"
 	"hired-valley-backend/controllers/course"
-	"hired-valley-backend/controllers/story"
+	"hired-valley-backend/controllers/stories"
 	"hired-valley-backend/models/courses"
+	"hired-valley-backend/models/story"
 	"hired-valley-backend/models/users"
 	"log"
 	"net/http"
@@ -32,6 +33,9 @@ func main() {
 		&users.LinkedInUser{},
 		&courses.Course{},
 		&courses.Lesson{},
+		&story.Story{},
+		&story.Reaction{},
+		&story.ViewStory{},
 	)
 	if err != nil {
 		log.Fatalf("Ошибка миграции базы данных: %v", err)
@@ -71,16 +75,16 @@ func main() {
 	http.HandleFunc("/create/lessons", course.CreateLesson)
 
 	http.HandleFunc("/stories", func(w http.ResponseWriter, r *http.Request) {
-		story.CreateStory(w, r, config.DB)
+		stories.CreateStory(w, r, config.DB)
 	})
 	http.HandleFunc("/stories/view", func(w http.ResponseWriter, r *http.Request) {
-		story.ViewStory(w, r, config.DB)
+		stories.ViewStory(w, r, config.DB)
 	})
 	http.HandleFunc("/stories/archive", func(w http.ResponseWriter, r *http.Request) {
-		story.ArchiveStory(w, r, config.DB)
+		stories.ArchiveStory(w, r, config.DB)
 	})
 	http.HandleFunc("/stories/user", func(w http.ResponseWriter, r *http.Request) {
-		story.GetUserStories(w, r, config.DB)
+		stories.GetUserStories(w, r, config.DB)
 	})
 
 	// Запускаем сервер

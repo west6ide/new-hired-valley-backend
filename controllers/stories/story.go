@@ -1,4 +1,4 @@
-package story
+package stories
 
 import (
 	"encoding/json"
@@ -34,7 +34,7 @@ func CreateStory(w http.ResponseWriter, r *http.Request, db *gorm.DB) {
 	newStory.ExpireAt = newStory.CreatedAt.Add(24 * time.Hour)
 
 	if result := db.Create(&newStory); result.Error != nil {
-		http.Error(w, "Failed to create story", http.StatusInternalServerError)
+		http.Error(w, "Failed to create stories", http.StatusInternalServerError)
 		return
 	}
 
@@ -76,7 +76,7 @@ func ViewStory(w http.ResponseWriter, r *http.Request, db *gorm.DB) {
 	storyIDStr := r.URL.Query().Get("id")
 	storyID, err := strconv.Atoi(storyIDStr)
 	if err != nil {
-		http.Error(w, "Invalid story ID", http.StatusBadRequest)
+		http.Error(w, "Invalid stories ID", http.StatusBadRequest)
 		return
 	}
 
@@ -114,7 +114,7 @@ func ArchiveStory(w http.ResponseWriter, r *http.Request, db *gorm.DB) {
 	storyIDStr := r.URL.Query().Get("id")
 	storyID, err := strconv.Atoi(storyIDStr)
 	if err != nil {
-		http.Error(w, "Invalid story ID", http.StatusBadRequest)
+		http.Error(w, "Invalid stories ID", http.StatusBadRequest)
 		return
 	}
 

@@ -87,6 +87,10 @@ func main() {
 		stories.GetUserStories(w, r, config.DB)
 	})
 
+	http.HandleFunc("/user_stories", func(w http.ResponseWriter, r *http.Request) {
+		stories.GetUserStoriesHandler(w, r, config.DB)
+	})
+
 	// Запускаем сервер
 	log.Printf("Сервер запущен на порту %s", port)
 	err = http.ListenAndServe(":"+port, nil)

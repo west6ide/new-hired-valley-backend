@@ -92,7 +92,7 @@ func ViewStory(w http.ResponseWriter, r *http.Request, db *gorm.DB) {
 		return
 	}
 
-	currentStory.Views += 1
+	currentStory.Views += 0
 	db.Save(&currentStory)
 
 	w.Header().Set("Content-Type", "application/json")

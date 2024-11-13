@@ -6,7 +6,7 @@ import (
 
 type Story struct {
 	ID         uint       `gorm:"primaryKey"`
-	UserID     uint       `gorm:"index"`
+	UserID     uint       `gorm:"index;constraint:OnDelete:CASCADE;"`
 	ContentURL string     `gorm:"type:text"`      // Ссылка на медиафайл (фото или видео)
 	CreatedAt  time.Time  `gorm:"autoCreateTime"` // Время создания истории
 	ExpireAt   time.Time  // Время истечения истории
@@ -19,7 +19,7 @@ type Story struct {
 type Reaction struct {
 	ID        uint      `gorm:"primaryKey"`
 	StoryID   uint      `gorm:"index"`
-	UserID    uint      `gorm:"index"`
+	UserID    uint      `gorm:"index;constraint:OnDelete:CASCADE;"`
 	Emoji     string    `gorm:"type:varchar(10)"` // Реакция (например, 😊, ❤️)
 	CreatedAt time.Time `gorm:"autoCreateTime"`
 }
@@ -27,6 +27,6 @@ type Reaction struct {
 type ViewStory struct {
 	ID       uint      `gorm:"primaryKey"`
 	StoryID  uint      `gorm:"index"`
-	UserID   uint      `gorm:"index"`
+	UserID   uint      `gorm:"index;constraint:OnDelete:CASCADE;"`
 	ViewedAt time.Time `gorm:"autoCreateTime"`
 }

@@ -3,16 +3,14 @@ package main
 import (
 	"fmt"
 	"hired-valley-backend/config"
-	"hired-valley-backend/controllers"
 	"hired-valley-backend/controllers/authentication"
 	"hired-valley-backend/controllers/course"
-	mentor "hired-valley-backend/controllers/mentors"
+	"hired-valley-backend/controllers/story"
 	"hired-valley-backend/models/courses"
 	"hired-valley-backend/models/users"
 	"log"
 	"net/http"
 	"os"
-	"time"
 )
 
 func main() {
@@ -34,11 +32,6 @@ func main() {
 		&users.LinkedInUser{},
 		&courses.Course{},
 		&courses.Lesson{},
-		&users.Story{},
-		&users.MentorProfile{},
-		&users.MentorSkill{},
-		&users.AvailableTime{},
-		&users.SocialLinks{},
 	)
 	if err != nil {
 		log.Fatalf("Ошибка миграции базы данных: %v", err)
@@ -77,56 +70,17 @@ func main() {
 	http.HandleFunc("/list/lessons", course.ListLessons)
 	http.HandleFunc("/create/lessons", course.CreateLesson)
 
-	http.HandleFunc("/create/stories", controllers.CreateStory)
-	http.HandleFunc("/list/stories", controllers.GetActiveStories)
-	http.HandleFunc("/stories/archive", controllers.ArchiveStory) // Параметр id передается как query параметр
-
-	//http.HandleFunc("/create/mentors", mentor.CreateMentorProfile)
-	//http.HandleFunc("/get/mentors/:id", mentor.GetMentorProfile)
-	//http.HandleFunc("/update/mentors/:id", mentor.UpdateMentorProfile)
-	//http.HandleFunc("/delete/mentors/:id", mentor.DeleteMentorProfile)
-	//
-	//// CRUD для AvailableTime (изменены маршруты, чтобы избежать конфликта)
-	//http.HandleFunc("/add/mentors/:id/availability", mentor.CreateAvailableTime)
-	//http.HandleFunc("/get/mentors/:id/availability", mentor.GetAvailableTimes)
-	//http.HandleFunc("/update/availability/:id", mentor.UpdateAvailableTime)
-	//http.HandleFunc("/delete/availability/:id", mentor.DeleteAvailableTime)
-
-	http.HandleFunc("/mentor/profile", func(w http.ResponseWriter, r *http.Request) {
-		switch r.Method {
-		case http.MethodPost:
-			mentor.CreateMentorProfile(w, r)
-		case http.MethodGet:
-			mentor.GetMentorProfile(w, r)
-		case http.MethodPut:
-			mentor.UpdateMentorProfile(w, r)
-		case http.MethodDelete:
-			mentor.DeleteMentorProfile(w, r)
-		default:
-			http.Error(w, "Method Not Allowed", http.StatusMethodNotAllowed)
-		}
+	http.HandleFunc("/stories", func(w http.ResponseWriter, r *http.Request) {
+		story.CreateStory(w, r, config.DB)
 	})
-
-	http.HandleFunc("/mentor/available_times", func(w http.ResponseWriter, r *http.Request) {
-		switch r.Method {
-		case http.MethodPost:
-			mentor.CreateAvailableTime(w, r)
-		case http.MethodGet:
-			mentor.GetAvailableTimes(w, r)
-		default:
-			http.Error(w, "Method Not Allowed", http.StatusMethodNotAllowed)
-		}
+	http.HandleFunc("/stories/view", func(w http.ResponseWriter, r *http.Request) {
+		story.ViewStory(w, r, config.DB)
 	})
-
-	http.HandleFunc("/mentor/available_times/", func(w http.ResponseWriter, r *http.Request) {
-		switch r.Method {
-		case http.MethodPut:
-			mentor.UpdateAvailableTime(w, r)
-		case http.MethodDelete:
-			mentor.DeleteAvailableTime(w, r)
-		default:
-			http.Error(w, "Method Not Allowed", http.StatusMethodNotAllowed)
-		}
+	http.HandleFunc("/stories/archive", func(w http.ResponseWriter, r *http.Request) {
+		story.ArchiveStory(w, r, config.DB)
+	})
+	http.HandleFunc("/stories/user", func(w http.ResponseWriter, r *http.Request) {
+		story.GetUserStories(w, r, config.DB)
 	})
 
 	// Запускаем сервер
@@ -171,12 +125,5 @@ func handleHome(w http.ResponseWriter, r *http.Request) {
                    <a href="/login/linkedin">Войти через LinkedIn</a>
                  </body></html>`
 		fmt.Fprint(w, html)
-	}
-}
-
-func RemoveExpiredStories() {
-	for {
-		config.DB.Where("expires_at <= ?", time.Now()).Delete(&users.Story{})
-		time.Sleep(1 * time.Hour) // Запуск каждые 1 час
 	}
 }

@@ -43,6 +43,9 @@ func Register(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Проверим, что ID пользователя установлен после создания
+	fmt.Printf("User registered with ID: %d\n", user.ID)
+
 	tokenString, err := generateToken(user.ID, user.Email, user.Role)
 	if err != nil {
 		http.Error(w, "Error generating token", http.StatusInternalServerError)
@@ -71,6 +74,9 @@ func Login(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Проверим, что ID пользователя корректно извлечен перед генерацией токена
+	fmt.Printf("User logged in with ID: %d\n", user.ID)
+
 	tokenString, err := generateToken(user.ID, user.Email, user.Role)
 	if err != nil {
 		http.Error(w, "Error generating token", http.StatusInternalServerError)
@@ -88,7 +94,7 @@ func ValidateToken(r *http.Request) (*Claims, error) {
 	}
 
 	tokenString := strings.TrimPrefix(authHeader, "Bearer ")
-	fmt.Println("Received Token:", tokenString) // Добавьте вывод токена для отладки
+	fmt.Println("Received Token:", tokenString) // Вывод токена для отладки
 
 	claims := &Claims{}
 	token, err := jwt.ParseWithClaims(tokenString, claims, func(token *jwt.Token) (interface{}, error) {
@@ -97,6 +103,9 @@ func ValidateToken(r *http.Request) (*Claims, error) {
 	if err != nil || !token.Valid {
 		return nil, errors.New("invalid token")
 	}
+
+	// Проверим, что `userID` корректно извлечен из токена
+	fmt.Printf("Token validated with userID: %d\n", claims.UserID)
 
 	return claims, nil
 }
@@ -111,6 +120,9 @@ func generateToken(userID uint, email, role string) (string, error) {
 			ExpiresAt: expirationTime.Unix(),
 		},
 	}
+
+	// Проверим, что `userID` передан и установлен правильно
+	fmt.Printf("Generating token with userID: %d\n", userID)
 
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
 	return token.SignedString(JwtKey)

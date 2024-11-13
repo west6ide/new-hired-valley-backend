@@ -136,25 +136,3 @@ func ArchiveStory(w http.ResponseWriter, r *http.Request, db *gorm.DB) {
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(currentStory)
 }
-
-func GetUserStoriesHandler(w http.ResponseWriter, r *http.Request, db *gorm.DB) {
-	// Проверка аутентификации токена
-	claims, err := authentication.ValidateToken(r)
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusUnauthorized)
-		return
-	}
-
-	if r.Method != http.MethodGet {
-		http.Error(w, "Invalid request method", http.StatusMethodNotAllowed)
-		return
-	}
-
-	// Получение всех активных историй пользователя
-	var stories []story.Story
-	db.Where("user_id = ? AND expire_at > ? AND is_archived = ?", claims.UserID, time.Now(), false).Find(&stories)
-
-	// Отправка ответа в формате JSON
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(stories)
-}

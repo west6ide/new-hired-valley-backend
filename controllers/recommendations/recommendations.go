@@ -18,10 +18,9 @@ import (
 const vanusAPIURL = "https://app.ai.vanus.ai/api/v1/0b973b9cd13f4635acae25277820b407" // Замените на ваш реальный API-ключ
 
 // GetUserByID извлекает профиль пользователя по его userID и загружает связанные навыки и интересы
-func GetUserByID(userID *authentication.Claims) (users.User, error) {
+func GetUserByID(claims *authentication.Claims) (users.User, error) {
 	var user users.User
-	// Поиск пользователя по ID с загрузкой навыков и интересов
-	result := config.DB.Preload("Skills").Preload("Interests").Preload("Stories").First(&user, userID)
+	result := config.DB.Preload("Skills").Preload("Interests").Preload("Stories").First(&user, claims.UserID)
 
 	if errors.Is(result.Error, gorm.ErrRecordNotFound) {
 		return users.User{}, errors.New("user not found")
@@ -79,28 +78,26 @@ func GetPersonalizedRecommendations(user users.User) ([]recommend.Content, error
 
 // GetRecommendationsHandler обрабатывает запрос для получения рекомендаций
 func GetRecommendationsHandler(w http.ResponseWriter, r *http.Request) {
-	// Проверка и извлечение userID из токена
 	userID, err := authentication.ValidateToken(r)
 	if err != nil {
 		http.Error(w, "Unauthorized: "+err.Error(), http.StatusUnauthorized)
 		return
 	}
 
-	// Получение профиля пользователя по userID
+	fmt.Printf("User ID from token: %d\n", userID.UserID) // Логирование для отладки
+
 	user, err := GetUserByID(userID)
 	if err != nil {
 		http.Error(w, "User not found", http.StatusNotFound)
 		return
 	}
 
-	// Получение персонализированных рекомендаций
 	recs, err := GetPersonalizedRecommendations(user)
 	if err != nil {
 		http.Error(w, "Failed to get recommendations", http.StatusInternalServerError)
 		return
 	}
 
-	// Возвращаем рекомендации в JSON формате
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(recs)
 }

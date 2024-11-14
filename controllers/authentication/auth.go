@@ -94,8 +94,6 @@ func ValidateToken(r *http.Request) (*Claims, error) {
 	}
 
 	tokenString := strings.TrimPrefix(authHeader, "Bearer ")
-	fmt.Println("Received Token:", tokenString) // Вывод токена для отладки
-
 	claims := &Claims{}
 	token, err := jwt.ParseWithClaims(tokenString, claims, func(token *jwt.Token) (interface{}, error) {
 		return JwtKey, nil
@@ -104,9 +102,7 @@ func ValidateToken(r *http.Request) (*Claims, error) {
 		return nil, errors.New("invalid token")
 	}
 
-	// Проверим, что `userID` корректно извлечен из токена
-	fmt.Printf("Token validated with userID: %d\n", claims.UserID)
-
+	fmt.Printf("Token validated with userID: %d\n", claims.UserID) // Логируем userID для отладки
 	return claims, nil
 }
 

@@ -45,12 +45,13 @@ func sendRequestToVanusAI(req recommend.RecommendationRequest) (*recommend.Recom
 		return nil, fmt.Errorf("failed to create request body: %w", err)
 	}
 
+	fmt.Printf("Request to Vanus AI: %s\n", string(reqBody))
+
 	httpReq, err := http.NewRequest("POST", vanusAPIURL, bytes.NewBuffer(reqBody))
 	if err != nil {
 		return nil, fmt.Errorf("failed to create HTTP request: %w", err)
 	}
 
-	// Устанавливаем заголовки
 	httpReq.Header.Set("Content-Type", "application/json")
 	httpReq.Header.Set("x-vanusai-model", "gpt-3.5-turbo")
 	httpReq.Header.Set("x-vanusai-sessionid", uuid.New().String())
@@ -69,7 +70,6 @@ func sendRequestToVanusAI(req recommend.RecommendationRequest) (*recommend.Recom
 
 	fmt.Printf("Raw response from Vanus AI: %s\n", string(body))
 
-	// Очищаем ответ
 	cleanedBody := cleanJSONResponse(string(body))
 
 	var vanusResponse recommend.RecommendationResponse
@@ -82,7 +82,6 @@ func sendRequestToVanusAI(req recommend.RecommendationRequest) (*recommend.Recom
 
 // GetPersonalizedRecommendations создает запрос на основе данных пользователя
 func GetPersonalizedRecommendations(user users.User) ([]recommend.Content, error) {
-	// Создаем промпт на основе профиля пользователя
 	skills := []string{}
 	for _, skill := range user.Skills {
 		skills = append(skills, skill.Name)
@@ -92,6 +91,8 @@ func GetPersonalizedRecommendations(user users.User) ([]recommend.Content, error
 	for _, interest := range user.Interests {
 		interests = append(interests, interest.Name)
 	}
+
+	fmt.Printf("Skills: %v, Interests: %v, Role: %s\n", skills, interests, user.Role)
 
 	prompt := fmt.Sprintf(
 		`Based on the user's professional profile, suggest relevant content from the knowledge base.
@@ -112,7 +113,8 @@ func GetPersonalizedRecommendations(user users.User) ([]recommend.Content, error
 		return nil, err
 	}
 
-	// Извлекаем только список рекомендаций
+	fmt.Printf("Vanus AI Response: %+v\n", response)
+
 	var recommendations []recommend.Content
 	for _, content := range response.Content {
 		recommendations = append(recommendations, recommend.Content{

@@ -3,41 +3,42 @@ package recommendations
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"fmt"
+	"github.com/google/uuid"
+	"gorm.io/gorm"
+	"hired-valley-backend/config"
+	"hired-valley-backend/controllers/authentication"
 	"hired-valley-backend/models/recommend"
+	"hired-valley-backend/models/users"
 	"io/ioutil"
 	"net/http"
+	"strings"
 )
 
 const vanusAPIURL = "https://app.ai.vanus.ai/api/v1/0b973b9cd13f4635acae25277820b407" // Замените на ваш реальный API-ключ
 
-// GetRecommendationsHandler обрабатывает запросы для получения рекомендаций
-func GetRecommendationsHandler(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodPost {
-		http.Error(w, "Invalid request method", http.StatusMethodNotAllowed)
-		return
+// GetUserByID извлекает профиль пользователя по его userID
+func GetUserByID(userID uint) (users.User, error) {
+	var user users.User
+	// Загрузка пользователя вместе с навыками и интересами
+	result := config.DB.Preload("Skills").Preload("Interests").First(&user, userID)
+	if errors.Is(result.Error, gorm.ErrRecordNotFound) {
+		return users.User{}, errors.New("user not found")
+	} else if result.Error != nil {
+		return users.User{}, result.Error
 	}
-
-	// Извлекаем промпт из тела запроса
-	var reqBody recommend.RecommendationRequest
-	if err := json.NewDecoder(r.Body).Decode(&reqBody); err != nil {
-		http.Error(w, "Bad request", http.StatusBadRequest)
-		return
-	}
-
-	// Отправляем запрос в Vanus AI
-	response, err := sendRequestToVanusAI(reqBody)
-	if err != nil {
-		http.Error(w, fmt.Sprintf("Failed to get recommendations: %v", err), http.StatusInternalServerError)
-		return
-	}
-
-	// Возвращаем ответ клиенту
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(response)
+	return user, nil
 }
 
-// sendRequestToVanusAI отправляет запрос к Vanus AI и возвращает ответ
+// cleanJSONResponse обрабатывает сырые данные, чтобы исправить возможные ошибки в формате
+func cleanJSONResponse(rawResponse string) string {
+	// Убираем некорректные пробелы или символы после чисел
+	cleaned := strings.ReplaceAll(rawResponse, "1. ", "1.0 ")
+	return cleaned
+}
+
+// sendRequestToVanusAI отправляет запрос в Vanus AI
 func sendRequestToVanusAI(req recommend.RecommendationRequest) (*recommend.RecommendationResponse, error) {
 	reqBody, err := json.Marshal(req)
 	if err != nil {
@@ -49,9 +50,10 @@ func sendRequestToVanusAI(req recommend.RecommendationRequest) (*recommend.Recom
 		return nil, fmt.Errorf("failed to create HTTP request: %w", err)
 	}
 
+	// Устанавливаем заголовки
 	httpReq.Header.Set("Content-Type", "application/json")
-	httpReq.Header.Set("x-vanusai-model", "gpt-4")
-	httpReq.Header.Set("x-vanusai-sessionid", "123e4567-e89b-12d3-a456-426614174000") // Генерируйте уникальный ID
+	httpReq.Header.Set("x-vanusai-model", "gpt-3.5-turbo")
+	httpReq.Header.Set("x-vanusai-sessionid", uuid.New().String())
 
 	client := &http.Client{}
 	resp, err := client.Do(httpReq)
@@ -60,15 +62,100 @@ func sendRequestToVanusAI(req recommend.RecommendationRequest) (*recommend.Recom
 	}
 	defer resp.Body.Close()
 
-	respBody, err := ioutil.ReadAll(resp.Body)
+	body, err := ioutil.ReadAll(resp.Body)
 	if err != nil {
 		return nil, fmt.Errorf("failed to read response: %w", err)
 	}
 
+	fmt.Printf("Raw response from Vanus AI: %s\n", string(body))
+
+	// Очищаем ответ
+	cleanedBody := cleanJSONResponse(string(body))
+
 	var vanusResponse recommend.RecommendationResponse
-	if err := json.Unmarshal(respBody, &vanusResponse); err != nil {
+	if err := json.Unmarshal([]byte(cleanedBody), &vanusResponse); err != nil {
 		return nil, fmt.Errorf("failed to decode response: %w", err)
 	}
 
 	return &vanusResponse, nil
+}
+
+// GetPersonalizedRecommendations создает запрос на основе данных пользователя
+func GetPersonalizedRecommendations(user users.User) ([]recommend.Content, error) {
+	// Создаем промпт на основе профиля пользователя
+	skills := []string{}
+	for _, skill := range user.Skills {
+		skills = append(skills, skill.Name)
+	}
+
+	interests := []string{}
+	for _, interest := range user.Interests {
+		interests = append(interests, interest.Name)
+	}
+
+	prompt := fmt.Sprintf(
+		`Based on the user's professional profile, suggest relevant content from the knowledge base.
+		Skills: %s, Interests: %s, Role: %s. Select the most relevant materials.`,
+		strings.Join(skills, ", "),
+		strings.Join(interests, ", "),
+		user.Role,
+	)
+
+	request := recommend.RecommendationRequest{
+		Prompt: prompt,
+		Stream: false,
+	}
+
+	// Получаем ответ из Vanus AI
+	response, err := sendRequestToVanusAI(request)
+	if err != nil {
+		return nil, err
+	}
+
+	// Извлекаем только список рекомендаций
+	var recommendations []recommend.Content
+	for _, content := range response.Content {
+		recommendations = append(recommendations, recommend.Content{
+			Title:       content.Title,
+			Description: content.Description,
+			ContentURL:  content.ContentURL,
+			Category:    content.Category,
+			SkillLevel:  content.SkillLevel,
+			Tags:        content.Tags,
+		})
+	}
+
+	return recommendations, nil
+}
+
+// GetRecommendationsHandler обрабатывает запрос для получения рекомендаций
+func GetRecommendationsHandler(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Invalid request method", http.StatusMethodNotAllowed)
+		return
+	}
+
+	claims, err := authentication.ValidateToken(r)
+	if err != nil {
+		http.Error(w, "Unauthorized: "+err.Error(), http.StatusUnauthorized)
+		return
+	}
+
+	// Извлекаем профиль пользователя
+	user, err := GetUserByID(claims.UserID)
+	if err != nil {
+		http.Error(w, "User not found", http.StatusNotFound)
+		return
+	}
+
+	// Получаем рекомендации
+	recs, err := GetPersonalizedRecommendations(user)
+	if err != nil {
+		http.Error(w, fmt.Sprintf("Failed to get recommendations: %v", err), http.StatusInternalServerError)
+		return
+	}
+
+	// Отправляем результат
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(recs)
 }

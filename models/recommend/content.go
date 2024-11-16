@@ -32,3 +32,21 @@ func (a *StringArray) Scan(value interface{}) error {
 	}
 	return json.Unmarshal(b, &a)
 }
+
+// RecommendationRequest описывает формат запроса к Vanus AI
+type RecommendationRequest struct {
+	Prompt string `json:"prompt"`
+	Stream bool   `json:"stream"`
+}
+
+// RecommendationResponse описывает ответ от Vanus AI
+type RecommendationResponse struct {
+	Content []struct {
+		Title       string   `json:"title"`
+		Description string   `json:"description"`
+		ContentURL  string   `json:"content_url"`
+		Category    string   `json:"category"`
+		SkillLevel  string   `json:"skill_level"`
+		Tags        []string `json:"tags"`
+	} `json:"content"`
+}

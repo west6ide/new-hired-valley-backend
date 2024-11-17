@@ -26,7 +26,7 @@ type OpenAIResponse struct {
 	} `json:"choices"`
 }
 
-// GenerateRecommendations создает рекомендации на основе профиля пользователя
+// GenerateRecommendations создает рекомендации на основе данных пользователя
 func GenerateRecommendations(user users.User) ([]recommend.Content, error) {
 	prompt := buildPrompt(user)
 
@@ -72,8 +72,24 @@ func GenerateRecommendations(user users.User) ([]recommend.Content, error) {
 func buildPrompt(user users.User) string {
 	return fmt.Sprintf(
 		"Based on the user's profile: Role: %s, Skills: %v, Interests: %v, suggest up to 5 relevant learning materials.",
-		user.Role, user.Skills, user.Interests,
+		user.Role, extractSkillNames(user.Skills), extractInterestNames(user.Interests),
 	)
+}
+
+func extractSkillNames(skills []users.Skill) []string {
+	names := make([]string, len(skills))
+	for i, skill := range skills {
+		names[i] = skill.Name
+	}
+	return names
+}
+
+func extractInterestNames(interests []users.Interest) []string {
+	names := make([]string, len(interests))
+	for i, interest := range interests {
+		names[i] = interest.Name
+	}
+	return names
 }
 
 func parseOpenAIResponse(resp OpenAIResponse) []recommend.Content {

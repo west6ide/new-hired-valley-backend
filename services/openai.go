@@ -14,9 +14,10 @@ const openAIEndpoint = "https://api.openai.com/v1/completions"
 
 // OpenAIRequest структура для отправки запроса к OpenAI
 type OpenAIRequest struct {
-	Model     string `json:"model"`
-	Prompt    string `json:"prompt"`
-	MaxTokens int    `json:"max_tokens"`
+	Model       string  `json:"model"`
+	Prompt      string  `json:"prompt"`
+	MaxTokens   int     `json:"max_tokens"`
+	Temperature float64 `json:"temperature"`
 }
 
 // OpenAIResponse структура для обработки ответа от OpenAI
@@ -31,9 +32,10 @@ func GenerateRecommendations(user users.User) ([]recommend.Content, error) {
 	prompt := buildPrompt(user)
 
 	reqBody := OpenAIRequest{
-		Model:     "text-davinci-003",
-		Prompt:    prompt,
-		MaxTokens: 300,
+		Model:       "text-davinci-003",
+		Prompt:      prompt,
+		MaxTokens:   300,
+		Temperature: 0.7,
 	}
 
 	payload, err := json.Marshal(reqBody)

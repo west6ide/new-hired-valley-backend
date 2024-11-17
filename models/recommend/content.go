@@ -1,6 +1,6 @@
 package recommend
 
-type Recommendation struct {
+type Content struct {
 	Title       string `json:"title"`
 	Description string `json:"description"`
 	URL         string `json:"url"`

@@ -27,7 +27,7 @@ type OpenAIResponse struct {
 }
 
 // GenerateRecommendations создает рекомендации на основе профиля пользователя
-func GenerateRecommendations(user users.User) ([]recommend.Recommendation, error) {
+func GenerateRecommendations(user users.User) ([]recommend.Content, error) {
 	prompt := buildPrompt(user)
 
 	reqBody := OpenAIRequest{
@@ -76,10 +76,10 @@ func buildPrompt(user users.User) string {
 	)
 }
 
-func parseOpenAIResponse(resp OpenAIResponse) []recommend.Recommendation {
-	var recommendations []recommend.Recommendation
+func parseOpenAIResponse(resp OpenAIResponse) []recommend.Content {
+	var recommendations []recommend.Content
 	for _, choice := range resp.Choices {
-		recommendations = append(recommendations, recommend.Recommendation{
+		recommendations = append(recommendations, recommend.Content{
 			Title:       "Recommended Content",
 			Description: choice.Text,
 			URL:         "https://example.com", // Можно заменить на динамическую ссылку

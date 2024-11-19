@@ -18,20 +18,20 @@ type ChatCompletionRequest struct {
 	MaxTokens int                     `json:"max_tokens"`
 }
 
-// Структура сообщения в запросе
+// Структура сообщения
 type ChatCompletionMessage struct {
-	Role    string `json:"role"`    // "system", "user", или "assistant"
-	Content string `json:"content"` // Текст сообщения
+	Role    string `json:"role"`
+	Content string `json:"content"`
 }
 
-// Структура ответа от AI/ML API
+// Структура ответа
 type ChatCompletionResponse struct {
 	Choices []struct {
 		Message ChatCompletionMessage `json:"message"`
 	} `json:"choices"`
 }
 
-// Генерация универсального prompt
+// Генерация укороченного prompt для бесплатного тарифа
 func GeneratePrompt(skills []users.Skill, interests []users.Interest) string {
 	skillNames := []string{}
 	for _, skill := range skills {
@@ -43,35 +43,49 @@ func GeneratePrompt(skills []users.Skill, interests []users.Interest) string {
 		interestNames = append(interestNames, interest.Name)
 	}
 
-	return fmt.Sprintf(`
-Based on the user's skills and interests, suggest at least 5 resources or strategies to help their career growth.
+	// Укороченный prompt
+	return fmt.Sprintf("Skills: %s. Interests: %s. Recommend 5 career resources.",
+		strings.Join(skillNames, ", "), strings.Join(interestNames, ", "))
+}
 
-Skills: %s
-Interests: %s
+// Проверка длины массива сообщений
+func checkMessagesLength(messages []ChatCompletionMessage) error {
+	totalLength := 0
+	for _, message := range messages {
+		totalLength += len(message.Content)
+	}
 
-Provide the recommendations in a numbered list.
-`, strings.Join(skillNames, ", "), strings.Join(interestNames, ", "))
+	if totalLength > 256 {
+		return fmt.Errorf("total length of 'messages' exceeds 256 characters: %d", totalLength)
+	}
+	return nil
 }
 
 // Взаимодействие с AI/ML API
 func GenerateRecommendations(apiKey, prompt string) (string, error) {
-	// Формируем массив сообщений для запроса
-	requestData := ChatCompletionRequest{
-		Model: "gpt-4",
-		Messages: []ChatCompletionMessage{
-			{Role: "system", Content: "You are a career recommendation assistant."},
-			{Role: "user", Content: prompt},
-		},
-		MaxTokens: 200,
+	// Формируем массив сообщений
+	messages := []ChatCompletionMessage{
+		{Role: "system", Content: "You are a career assistant."},
+		{Role: "user", Content: prompt},
 	}
 
-	// Сериализуем запрос в JSON
+	// Проверяем длину сообщений
+	if err := checkMessagesLength(messages); err != nil {
+		return "", fmt.Errorf("messages array too long: %w", err)
+	}
+
+	// Подготовка данных запроса
+	requestData := ChatCompletionRequest{
+		Model:     "gpt-4",
+		Messages:  messages,
+		MaxTokens: 100, // Уменьшение количества токенов для бесплатного тарифа
+	}
+
 	jsonData, err := json.Marshal(requestData)
 	if err != nil {
 		return "", fmt.Errorf("failed to serialize request: %w", err)
 	}
 
-	// Создаём HTTP-запрос
 	req, err := http.NewRequest("POST", AIMLAPIEndpoint, bytes.NewBuffer(jsonData))
 	if err != nil {
 		return "", fmt.Errorf("failed to create request: %w", err)
@@ -81,7 +95,6 @@ func GenerateRecommendations(apiKey, prompt string) (string, error) {
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Authorization", "Bearer "+apiKey)
 
-	// Отправляем запрос
 	client := &http.Client{}
 	resp, err := client.Do(req)
 	if err != nil {
@@ -89,13 +102,13 @@ func GenerateRecommendations(apiKey, prompt string) (string, error) {
 	}
 	defer resp.Body.Close()
 
-	// Проверяем статус ответа
+	// Проверка статуса ответа
 	if resp.StatusCode != http.StatusOK {
 		body, _ := ioutil.ReadAll(resp.Body)
 		return "", fmt.Errorf("API returned status %d: %s", resp.StatusCode, string(body))
 	}
 
-	// Распаковываем ответ
+	// Распаковка ответа
 	var completionResp ChatCompletionResponse
 	err = json.NewDecoder(resp.Body).Decode(&completionResp)
 	if err != nil {

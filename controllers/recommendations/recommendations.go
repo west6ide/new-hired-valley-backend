@@ -7,36 +7,38 @@ import (
 	"hired-valley-backend/models/users"
 	"hired-valley-backend/services"
 	"net/http"
+	"os"
 )
 
-// GetRecommendations обрабатывает запросы для получения рекомендаций
-func GetRecommendations(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodPost {
-		http.Error(w, "Invalid request method", http.StatusMethodNotAllowed)
-		return
-	}
-
-	// Проверяем токен пользователя
+func GetRecommendationsHandler(w http.ResponseWriter, r *http.Request) {
+	// Извлекаем данные токена
 	claims, err := authentication.ValidateToken(r)
 	if err != nil {
 		http.Error(w, "Unauthorized: "+err.Error(), http.StatusUnauthorized)
 		return
 	}
 
-	// Извлекаем данные пользователя из базы по UserID из токена
+	// Получаем userID из токена
+	userID := claims.UserID
+
+	// Ищем пользователя в базе данных
 	var user users.User
-	if err := config.DB.Preload("Skills").Preload("Interests").First(&user, claims.UserID).Error; err != nil {
+	if err := config.DB.Preload("Skills").Preload("Interests").First(&user, userID).Error; err != nil {
 		http.Error(w, "User not found", http.StatusNotFound)
 		return
 	}
 
-	// Генерируем рекомендации
-	recommendations, err := services.GenerateRecommendations(user)
+	// Генерируем рекомендации через OpenAI API
+	apiKey := os.Getenv("OPENAI_API_KEY")
+	recs, err := services.GenerateAIRecommendationsForUser(config.DB, apiKey, userID)
 	if err != nil {
-		http.Error(w, "Failed to get recommendations: "+err.Error(), http.StatusInternalServerError)
+		http.Error(w, "Failed to generate recommendations: "+err.Error(), http.StatusInternalServerError)
 		return
 	}
 
+	// Возвращаем рекомендации
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(recommendations)
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"recommendations": recs,
+	})
 }

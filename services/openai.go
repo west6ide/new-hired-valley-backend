@@ -1,107 +1,74 @@
 package services
 
 import (
-	"bytes"
-	"encoding/json"
+	"context"
 	"fmt"
-	"hired-valley-backend/models/recommend"
+	"github.com/sashabaranov/go-openai"
+	"gorm.io/gorm"
 	"hired-valley-backend/models/users"
-	"net/http"
-	"os"
+	"strings"
 )
 
-const openAIEndpoint = "https://api.openai.com/v1/completions"
+func GenerateAIRecommendationsForUser(db *gorm.DB, apiKey string, userID uint) ([]string, error) {
+	// Загружаем пользователя и его данные из базы
+	var user users.User
+	if err := db.Preload("Skills").Preload("Interests").First(&user, userID).Error; err != nil {
+		return nil, fmt.Errorf("failed to find user: %w", err)
+	}
 
-// OpenAIRequest структура для отправки запроса к OpenAI
-type OpenAIRequest struct {
-	Model       string  `json:"model"`
-	Prompt      string  `json:"prompt"`
-	MaxTokens   int     `json:"max_tokens"`
-	Temperature float64 `json:"temperature"`
-}
+	// Инициализируем OpenAI клиент
+	client := openai.NewClient(apiKey)
 
-// OpenAIResponse структура для обработки ответа от OpenAI
-type OpenAIResponse struct {
-	Choices []struct {
-		Text string `json:"text"`
-	} `json:"choices"`
-}
+	// Формируем запрос (prompt) для OpenAI
+	prompt := createPrompt(user)
 
-// GenerateRecommendations создает рекомендации на основе данных пользователя
-func GenerateRecommendations(user users.User) ([]recommend.Content, error) {
-	prompt := buildPrompt(user)
-
-	reqBody := OpenAIRequest{
-		Model:       "text-davinci-003",
+	// Отправляем запрос в OpenAI
+	resp, err := client.CreateCompletion(context.Background(), openai.CompletionRequest{
+		Model:       openai.GPT4,
 		Prompt:      prompt,
-		MaxTokens:   300,
+		MaxTokens:   200,
 		Temperature: 0.7,
-	}
-
-	payload, err := json.Marshal(reqBody)
+	})
 	if err != nil {
-		return nil, fmt.Errorf("failed to encode request: %w", err)
+		return nil, fmt.Errorf("failed to get AI recommendations: %w", err)
 	}
 
-	req, err := http.NewRequest("POST", openAIEndpoint, bytes.NewBuffer(payload))
-	if err != nil {
-		return nil, fmt.Errorf("failed to create request: %w", err)
-	}
-
-	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("Authorization", "Bearer "+os.Getenv("OPENAI_API_KEY"))
-
-	client := &http.Client{}
-	resp, err := client.Do(req)
-	if err != nil {
-		return nil, fmt.Errorf("failed to send request: %w", err)
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("unexpected response status: %s", resp.Status)
-	}
-
-	var openAIResp OpenAIResponse
-	if err := json.NewDecoder(resp.Body).Decode(&openAIResp); err != nil {
-		return nil, fmt.Errorf("failed to decode response: %w", err)
-	}
-
-	recommendations := parseOpenAIResponse(openAIResp)
-	return recommendations, nil
+	return parseAIResponse(resp.Choices[0].Text), nil
 }
 
-func buildPrompt(user users.User) string {
-	return fmt.Sprintf(
-		"Based on the user's profile: Role: %s, Skills: %v, Interests: %v, suggest up to 5 relevant learning materials.",
-		user.Role, extractSkillNames(user.Skills), extractInterestNames(user.Interests),
-	)
+func createPrompt(user users.User) string {
+	return fmt.Sprintf(`
+	Based on the following skills and interests, suggest at least 5 useful courses or resources to help the user improve:
+	Skills: %s
+	Interests: %s
+	Provide the recommendations in a list format.
+	`, skillsToString(user.Skills), interestsToString(user.Interests))
 }
 
-func extractSkillNames(skills []users.Skill) []string {
-	names := make([]string, len(skills))
-	for i, skill := range skills {
-		names[i] = skill.Name
-	}
-	return names
-}
-
-func extractInterestNames(interests []users.Interest) []string {
-	names := make([]string, len(interests))
-	for i, interest := range interests {
-		names[i] = interest.Name
-	}
-	return names
-}
-
-func parseOpenAIResponse(resp OpenAIResponse) []recommend.Content {
-	var recommendations []recommend.Content
-	for _, choice := range resp.Choices {
-		recommendations = append(recommendations, recommend.Content{
-			Title:       "Recommended Content",
-			Description: choice.Text,
-			URL:         "https://example.com", // Можно заменить на динамическую ссылку
-		})
+func parseAIResponse(response string) []string {
+	lines := strings.Split(response, "\n")
+	var recommendations []string
+	for _, line := range lines {
+		trimmed := strings.TrimSpace(line)
+		if trimmed != "" {
+			recommendations = append(recommendations, trimmed)
+		}
 	}
 	return recommendations
+}
+
+func skillsToString(skills []users.Skill) string {
+	var names []string
+	for _, skill := range skills {
+		names = append(names, skill.Name)
+	}
+	return strings.Join(names, ", ")
+}
+
+func interestsToString(interests []users.Interest) string {
+	var names []string
+	for _, interest := range interests {
+		names = append(names, interest.Name)
+	}
+	return strings.Join(names, ", ")
 }

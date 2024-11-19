@@ -38,7 +38,7 @@ func main() {
 		&story.Story{},
 		&story.Reaction{},
 		&story.ViewStory{},
-		&recommend.Content{},
+		&recommend.Recommendation{},
 	)
 	if err != nil {
 		log.Fatalf("Ошибка миграции базы данных: %v", err)
@@ -90,7 +90,7 @@ func main() {
 		stories.GetUserStories(w, r, config.DB)
 	})
 
-	http.HandleFunc("/recommendations", recommendations.GetRecommendations)
+	http.HandleFunc("/recommendations", recommendations.GetRecommendationsHandler)
 
 	// Запускаем сервер
 	log.Printf("Сервер запущен на порту %s", port)

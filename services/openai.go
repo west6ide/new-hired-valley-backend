@@ -20,29 +20,37 @@ func GenerateAIRecommendationsForUser(db *gorm.DB, apiKey string, userID uint) (
 	client := openai.NewClient(apiKey)
 
 	// Формируем запрос (prompt) для OpenAI
-	prompt := createPrompt(user)
+	prompt := createChatPrompt(user)
 
-	// Отправляем запрос в OpenAI
-	resp, err := client.CreateCompletion(context.Background(), openai.CompletionRequest{
-		Model:       openai.GPT4,
-		Prompt:      prompt,
-		MaxTokens:   200,
-		Temperature: 0.7,
+	// Отправляем запрос в OpenAI (используем CreateChatCompletion)
+	resp, err := client.CreateChatCompletion(context.Background(), openai.ChatCompletionRequest{
+		Model: openai.GPT4,
+		Messages: []openai.ChatCompletionMessage{
+			{
+				Role:    openai.ChatMessageRoleSystem,
+				Content: "You are an AI assistant providing personalized learning recommendations.",
+			},
+			{
+				Role:    openai.ChatMessageRoleUser,
+				Content: prompt,
+			},
+		},
 	})
 	if err != nil {
 		return nil, fmt.Errorf("failed to get AI recommendations: %w", err)
 	}
 
-	return parseAIResponse(resp.Choices[0].Text), nil
+	// Парсим ответ
+	return parseAIResponse(resp.Choices[0].Message.Content), nil
 }
 
-func createPrompt(user users.User) string {
+func createChatPrompt(user users.User) string {
 	return fmt.Sprintf(`
-	Based on the following skills and interests, suggest at least 5 useful courses or resources to help the user improve:
-	Skills: %s
-	Interests: %s
-	Provide the recommendations in a list format.
-	`, skillsToString(user.Skills), interestsToString(user.Interests))
+Based on the following skills and interests, suggest at least 5 useful courses or resources to help the user improve:
+Skills: %s
+Interests: %s
+Provide the recommendations in a list format.
+`, skillsToString(user.Skills), interestsToString(user.Interests))
 }
 
 func parseAIResponse(response string) []string {

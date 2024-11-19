@@ -78,7 +78,7 @@ func GenerateRecommendations(apiKey, prompt string) (string, error) {
 	requestData := ChatCompletionRequest{
 		Model:     "gpt-4",
 		Messages:  messages,
-		MaxTokens: 100, // Уменьшение количества токенов для бесплатного тарифа
+		MaxTokens: 100,
 	}
 
 	jsonData, err := json.Marshal(requestData)
@@ -102,20 +102,25 @@ func GenerateRecommendations(apiKey, prompt string) (string, error) {
 	}
 	defer resp.Body.Close()
 
-	// Проверка статуса ответа
-	if resp.StatusCode != http.StatusOK {
-		body, _ := ioutil.ReadAll(resp.Body)
+	// Читаем тело ответа
+	body, err := ioutil.ReadAll(resp.Body)
+	if err != nil {
+		return "", fmt.Errorf("failed to read response body: %w", err)
+	}
+
+	// Проверяем статус ответа
+	if resp.StatusCode != http.StatusCreated {
 		return "", fmt.Errorf("API returned status %d: %s", resp.StatusCode, string(body))
 	}
 
-	// Распаковка ответа
+	// Распаковываем успешный ответ
 	var completionResp ChatCompletionResponse
-	err = json.NewDecoder(resp.Body).Decode(&completionResp)
+	err = json.Unmarshal(body, &completionResp)
 	if err != nil {
 		return "", fmt.Errorf("failed to decode API response: %w", err)
 	}
 
-	// Возвращаем текст первой рекомендации
+	// Проверяем, есть ли в ответе рекомендации
 	if len(completionResp.Choices) > 0 {
 		return completionResp.Choices[0].Message.Content, nil
 	}

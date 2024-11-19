@@ -10,7 +10,7 @@ import (
 	"strings"
 )
 
-const AIMLAPIEndpoint = "https://api.aimlapi.com/v1/text/completion"
+const AIMLAPIEndpoint = "https://api.aimlapi.com/chat/completions"
 
 // Структура запроса к AI/ML API
 type CompletionRequest struct {

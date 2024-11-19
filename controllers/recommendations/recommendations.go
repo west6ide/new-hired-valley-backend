@@ -3,7 +3,7 @@ package recommendations
 import (
 	"encoding/json"
 	"fmt"
-	"gorm.io/gorm"
+	"hired-valley-backend/config"
 	"hired-valley-backend/controllers/authentication"
 	"hired-valley-backend/models/users"
 	"hired-valley-backend/services"
@@ -11,7 +11,7 @@ import (
 	"os"
 )
 
-func GenerateRecommendationsHandler(w http.ResponseWriter, r *http.Request, db *gorm.DB) {
+func GenerateRecommendationsHandler(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		return
@@ -26,7 +26,7 @@ func GenerateRecommendationsHandler(w http.ResponseWriter, r *http.Request, db *
 
 	// Получаем пользователя из базы данных
 	var user users.User
-	err = db.Preload("Skills").Preload("Interests").First(&user, claims.UserID).Error
+	err = config.DB.Preload("Skills").Preload("Interests").First(&user, claims.UserID).Error
 	if err != nil {
 		http.Error(w, "User not found", http.StatusNotFound)
 		return

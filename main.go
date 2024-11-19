@@ -90,7 +90,7 @@ func main() {
 		stories.GetUserStories(w, r, config.DB)
 	})
 
-	http.HandleFunc("/recommendations", recommendations.GetRecommendationsHandler)
+	http.HandleFunc("/generate-recommendations", recommendations.GenerateRecommendationsHandler)
 
 	// Запускаем сервер
 	log.Printf("Сервер запущен на порту %s", port)

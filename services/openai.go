@@ -1,82 +1,92 @@
 package services
 
 import (
-	"context"
+	"bytes"
+	"encoding/json"
 	"fmt"
-	"github.com/sashabaranov/go-openai"
-	"gorm.io/gorm"
 	"hired-valley-backend/models/users"
+	"io/ioutil"
+	"net/http"
 	"strings"
 )
 
-func GenerateAIRecommendationsForUser(db *gorm.DB, apiKey string, userID uint) ([]string, error) {
-	// Загружаем пользователя и его данные из базы
-	var user users.User
-	if err := db.Preload("Skills").Preload("Interests").First(&user, userID).Error; err != nil {
-		return nil, fmt.Errorf("failed to find user: %w", err)
-	}
+const AIMLAPIEndpoint = "https://api.aimlapi.com/v1/text/completion"
 
-	// Инициализируем OpenAI клиент
-	client := openai.NewClient(apiKey)
-
-	// Формируем запрос (prompt) для OpenAI
-	prompt := createChatPrompt(user)
-
-	// Отправляем запрос в OpenAI (используем CreateChatCompletion)
-	resp, err := client.CreateChatCompletion(context.Background(), openai.ChatCompletionRequest{
-		Model: openai.GPT4,
-		Messages: []openai.ChatCompletionMessage{
-			{
-				Role:    openai.ChatMessageRoleSystem,
-				Content: "You are an AI assistant providing personalized learning recommendations.",
-			},
-			{
-				Role:    openai.ChatMessageRoleUser,
-				Content: prompt,
-			},
-		},
-	})
-	if err != nil {
-		return nil, fmt.Errorf("failed to get AI recommendations: %w", err)
-	}
-
-	// Парсим ответ
-	return parseAIResponse(resp.Choices[0].Message.Content), nil
+// Структура запроса к AI/ML API
+type CompletionRequest struct {
+	Model     string `json:"model"`
+	Prompt    string `json:"prompt"`
+	MaxTokens int    `json:"max_tokens"`
 }
 
-func createChatPrompt(user users.User) string {
+// Структура ответа от AI/ML API
+type CompletionResponse struct {
+	Text string `json:"text"`
+}
+
+// Генерация универсального prompt на основе навыков и интересов
+func GeneratePrompt(skills []users.Skill, interests []users.Interest) string {
+	skillNames := []string{}
+	for _, skill := range skills {
+		skillNames = append(skillNames, skill.Name)
+	}
+
+	interestNames := []string{}
+	for _, interest := range interests {
+		interestNames = append(interestNames, interest.Name)
+	}
+
 	return fmt.Sprintf(`
-Based on the following skills and interests, suggest at least 5 useful courses or resources to help the user improve:
+You are a professional career assistant. Based on the user's skills and interests, suggest at least 5 useful resources, courses, or strategies to help the user grow professionally.
+
 Skills: %s
 Interests: %s
-Provide the recommendations in a list format.
-`, skillsToString(user.Skills), interestsToString(user.Interests))
+
+Provide the recommendations in a numbered list.
+`, strings.Join(skillNames, ", "), strings.Join(interestNames, ", "))
 }
 
-func parseAIResponse(response string) []string {
-	lines := strings.Split(response, "\n")
-	var recommendations []string
-	for _, line := range lines {
-		trimmed := strings.TrimSpace(line)
-		if trimmed != "" {
-			recommendations = append(recommendations, trimmed)
-		}
+// Взаимодействие с AI/ML API
+func GenerateRecommendations(apiKey, prompt string) (string, error) {
+	requestData := CompletionRequest{
+		Model:     "gpt-4",
+		Prompt:    prompt,
+		MaxTokens: 200,
 	}
-	return recommendations
-}
 
-func skillsToString(skills []users.Skill) string {
-	var names []string
-	for _, skill := range skills {
-		names = append(names, skill.Name)
+	jsonData, err := json.Marshal(requestData)
+	if err != nil {
+		return "", fmt.Errorf("failed to serialize request: %w", err)
 	}
-	return strings.Join(names, ", ")
-}
 
-func interestsToString(interests []users.Interest) string {
-	var names []string
-	for _, interest := range interests {
-		names = append(names, interest.Name)
+	req, err := http.NewRequest("POST", AIMLAPIEndpoint, bytes.NewBuffer(jsonData))
+	if err != nil {
+		return "", fmt.Errorf("failed to create request: %w", err)
 	}
-	return strings.Join(names, ", ")
+
+	// Установка заголовков
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Authorization", "Bearer "+apiKey)
+
+	client := &http.Client{}
+	resp, err := client.Do(req)
+	if err != nil {
+		return "", fmt.Errorf("failed to send request: %w", err)
+	}
+	defer resp.Body.Close()
+
+	// Проверка статуса ответа
+	if resp.StatusCode != http.StatusOK {
+		body, _ := ioutil.ReadAll(resp.Body)
+		return "", fmt.Errorf("API returned status %d: %s", resp.StatusCode, string(body))
+	}
+
+	// Декодирование ответа
+	var completionResp CompletionResponse
+	err = json.NewDecoder(resp.Body).Decode(&completionResp)
+	if err != nil {
+		return "", fmt.Errorf("failed to decode API response: %w", err)
+	}
+
+	return completionResp.Text, nil
 }

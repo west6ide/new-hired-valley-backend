@@ -2,7 +2,8 @@ package recommendations
 
 import (
 	"encoding/json"
-	"hired-valley-backend/config"
+	"fmt"
+	"gorm.io/gorm"
 	"hired-valley-backend/controllers/authentication"
 	"hired-valley-backend/models/users"
 	"hired-valley-backend/services"
@@ -10,35 +11,50 @@ import (
 	"os"
 )
 
-func GetRecommendationsHandler(w http.ResponseWriter, r *http.Request) {
-	// Извлекаем данные токена
+func GenerateRecommendationsHandler(w http.ResponseWriter, r *http.Request, db *gorm.DB) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	// Проверяем токен и извлекаем данные
 	claims, err := authentication.ValidateToken(r)
 	if err != nil {
 		http.Error(w, "Unauthorized: "+err.Error(), http.StatusUnauthorized)
 		return
 	}
 
-	// Получаем userID из токена
-	userID := claims.UserID
-
-	// Ищем пользователя в базе данных
+	// Получаем пользователя из базы данных
 	var user users.User
-	if err := config.DB.Preload("Skills").Preload("Interests").First(&user, userID).Error; err != nil {
+	err = db.Preload("Skills").Preload("Interests").First(&user, claims.UserID).Error
+	if err != nil {
 		http.Error(w, "User not found", http.StatusNotFound)
 		return
 	}
 
-	// Генерируем рекомендации через OpenAI API
-	apiKey := os.Getenv("OPENAI_API_KEY")
-	recs, err := services.GenerateAIRecommendationsForUser(config.DB, apiKey, userID)
+	// Генерация prompt
+	prompt := services.GeneratePrompt(user.Skills, user.Interests)
+
+	// Получение API-ключа
+	apiKey := os.Getenv("AIML_API_KEY")
+	if apiKey == "" {
+		http.Error(w, "API key is missing in server configuration", http.StatusInternalServerError)
+		return
+	}
+
+	// Вызов AI/ML API
+	response, err := services.GenerateRecommendations(apiKey, prompt)
 	if err != nil {
-		http.Error(w, "Failed to generate recommendations: "+err.Error(), http.StatusInternalServerError)
+		w.WriteHeader(http.StatusInternalServerError)
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"error": fmt.Sprintf("Failed to generate recommendations: %v", err),
+		})
 		return
 	}
 
 	// Возвращаем рекомендации
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]interface{}{
-		"recommendations": recs,
+		"recommendations": response,
 	})
 }

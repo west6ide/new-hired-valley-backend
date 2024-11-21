@@ -31,52 +31,6 @@ type ChatCompletionResponse struct {
 	} `json:"choices"`
 }
 
-// Генерация укороченного prompt для бесплатного тарифа
-func GeneratePrompt(skills []users.Skill, interests []users.Interest) string {
-	skillNames := []string{}
-	for _, skill := range skills {
-		skillNames = append(skillNames, skill.Name)
-	}
-
-	interestNames := []string{}
-	for _, interest := range interests {
-		interestNames = append(interestNames, interest.Name)
-	}
-
-	// Укороченный prompt
-	return fmt.Sprintf("Skills: %s. Interests: %s. Recommend 5 career resources.",
-		strings.Join(skillNames, ", "), strings.Join(interestNames, ", "))
-}
-
-func GenerateCareerPrompt(shortTermGoals, longTermGoals string) string {
-	return fmt.Sprintf(`
-You are a career coach. Based on the following goals, create a step-by-step career plan for the user:
-
-Short-term goals: %s
-Long-term goals: %s
-
-Include:
-1. Recommended skills to develop.
-2. Suggested resources or courses.
-3. Recommended mentors to connect with.
-
-Provide the steps in a numbered list.
-`, shortTermGoals, longTermGoals)
-}
-
-// Проверка длины массива сообщений
-func checkMessagesLength(messages []ChatCompletionMessage) error {
-	totalLength := 0
-	for _, message := range messages {
-		totalLength += len(message.Content)
-	}
-
-	if totalLength > 256 {
-		return fmt.Errorf("total length of 'messages' exceeds 256 characters: %d", totalLength)
-	}
-	return nil
-}
-
 // Взаимодействие с AI/ML API
 func GenerateRecommendations(apiKey, prompt string) (string, error) {
 	// Формируем массив сообщений
@@ -142,4 +96,34 @@ func GenerateRecommendations(apiKey, prompt string) (string, error) {
 	}
 
 	return "", fmt.Errorf("no recommendations returned by the API")
+}
+
+// Генерация укороченного prompt для бесплатного тарифа
+func GeneratePrompt(skills []users.Skill, interests []users.Interest) string {
+	skillNames := []string{}
+	for _, skill := range skills {
+		skillNames = append(skillNames, skill.Name)
+	}
+
+	interestNames := []string{}
+	for _, interest := range interests {
+		interestNames = append(interestNames, interest.Name)
+	}
+
+	// Укороченный prompt
+	return fmt.Sprintf("Skills: %s. Interests: %s. Recommend 5 career resources.",
+		strings.Join(skillNames, ", "), strings.Join(interestNames, ", "))
+}
+
+// Проверка длины массива сообщений
+func checkMessagesLength(messages []ChatCompletionMessage) error {
+	totalLength := 0
+	for _, message := range messages {
+		totalLength += len(message.Content)
+	}
+
+	if totalLength > 256 {
+		return fmt.Errorf("total length of 'messages' exceeds 256 characters: %d", totalLength)
+	}
+	return nil
 }

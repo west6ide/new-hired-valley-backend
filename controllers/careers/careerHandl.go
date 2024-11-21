@@ -28,7 +28,6 @@ func GenerateCareerPlanHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Получаем запрос
 	var req CareerPlanRequest
 	err = json.NewDecoder(r.Body).Decode(&req)
 	if err != nil {
@@ -36,29 +35,25 @@ func GenerateCareerPlanHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Генерация prompt
-	prompt := services.GenerateCareerPrompt(req.ShortTermGoals, req.LongTermGoals)
-
-	// Получение API-ключа
 	apiKey := os.Getenv("AIML_API_KEY")
 	if apiKey == "" {
 		http.Error(w, "API key is missing", http.StatusInternalServerError)
 		return
 	}
 
-	// Вызов AI/ML API
-	response, err := services.GenerateRecommendations(apiKey, prompt)
+	// Генерация карьерного плана
+	plan, err := services.GenerateCareerPlan(apiKey, req.ShortTermGoals, req.LongTermGoals)
 	if err != nil {
-		http.Error(w, "Failed to generate plan: "+err.Error(), http.StatusInternalServerError)
+		http.Error(w, "Failed to generate career plan: "+err.Error(), http.StatusInternalServerError)
 		return
 	}
 
-	// Сохраняем план в базе данных
+	// Сохранение плана в базе данных
 	careerPlan := career.PlanCareer{
 		UserID:         claims.UserID,
 		ShortTermGoals: req.ShortTermGoals,
 		LongTermGoals:  req.LongTermGoals,
-		Steps:          response,
+		Steps:          plan,
 	}
 	if err := config.DB.Create(&careerPlan).Error; err != nil {
 		http.Error(w, "Failed to save plan", http.StatusInternalServerError)
@@ -69,6 +64,6 @@ func GenerateCareerPlanHandler(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]interface{}{
 		"plan_id": careerPlan.ID,
-		"steps":   response,
+		"steps":   plan,
 	})
 }

@@ -48,6 +48,22 @@ func GeneratePrompt(skills []users.Skill, interests []users.Interest) string {
 		strings.Join(skillNames, ", "), strings.Join(interestNames, ", "))
 }
 
+func GenerateCareerPrompt(shortTermGoals, longTermGoals string) string {
+	return fmt.Sprintf(`
+You are a career coach. Based on the following goals, create a step-by-step career plan for the user:
+
+Short-term goals: %s
+Long-term goals: %s
+
+Include:
+1. Recommended skills to develop.
+2. Suggested resources or courses.
+3. Recommended mentors to connect with.
+
+Provide the steps in a numbered list.
+`, shortTermGoals, longTermGoals)
+}
+
 // Проверка длины массива сообщений
 func checkMessagesLength(messages []ChatCompletionMessage) error {
 	totalLength := 0

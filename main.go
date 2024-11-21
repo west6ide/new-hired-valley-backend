@@ -4,9 +4,11 @@ import (
 	"fmt"
 	"hired-valley-backend/config"
 	"hired-valley-backend/controllers/authentication"
+	"hired-valley-backend/controllers/careers"
 	"hired-valley-backend/controllers/course"
 	"hired-valley-backend/controllers/recommendations"
 	"hired-valley-backend/controllers/stories"
+	"hired-valley-backend/models/career"
 	"hired-valley-backend/models/courses"
 	"hired-valley-backend/models/recommend"
 	"hired-valley-backend/models/story"
@@ -39,6 +41,7 @@ func main() {
 		&story.Reaction{},
 		&story.ViewStory{},
 		&recommend.Recommendation{},
+		&career.PlanCareer{},
 	)
 	if err != nil {
 		log.Fatalf("Ошибка миграции базы данных: %v", err)
@@ -91,6 +94,7 @@ func main() {
 	})
 
 	http.HandleFunc("/generate-recommendations", recommendations.GenerateRecommendationsHandler)
+	http.HandleFunc("/careersPlan", careers.GenerateCareerPlanHandler)
 
 	// Запускаем сервер
 	log.Printf("Сервер запущен на порту %s", port)

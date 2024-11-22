@@ -6,9 +6,8 @@ import (
 )
 
 type Lesson struct {
-	ID             uint `gorm:"primaryKey"`
-	CourseID       uint `gorm:"not null"`
-	Course         Course
+	ID             uint      `gorm:"primaryKey"`
+	CourseID       uint      `gorm:"not null"`
 	Title          string    `gorm:"not null"`
 	VimeoVideoLink string    `gorm:"type:varchar(255)"`
 	CreatedAt      time.Time `gorm:"default:current_timestamp"`

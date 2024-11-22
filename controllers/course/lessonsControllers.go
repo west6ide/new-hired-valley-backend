@@ -64,7 +64,7 @@ func CreateLesson(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Проверяем, что пользователь является инструктором
-	if claims.Role != "instructor" {
+	if claims.Role != "mentor" {
 		http.Error(w, "Only instructors can create lessons", http.StatusForbidden)
 		return
 	}

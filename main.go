@@ -76,7 +76,7 @@ func main() {
 
 	http.HandleFunc("/list/courses", course.ListCourses)
 	http.HandleFunc("/create/courses", course.CreateCourse)
-	http.HandleFunc("/upload/video", course.UploadVideo)
+	http.HandleFunc("/upload-video-to-lesson", course.UploadVideoToLesson)
 	http.HandleFunc("/list/lessons", course.ListLessons)
 	http.HandleFunc("/create/lessons", course.CreateLesson)
 

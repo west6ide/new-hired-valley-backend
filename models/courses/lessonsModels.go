@@ -9,7 +9,7 @@ type Lesson struct {
 	ID             uint      `gorm:"primaryKey"`
 	CourseID       uint      `gorm:"not null"`
 	Title          string    `gorm:"not null"`
-	VimeoVideoLink string    `gorm:"type:varchar(255)"`
+	VimeoVideoLink string    `json:"vimeo_video_link"`
 	CreatedAt      time.Time `gorm:"default:current_timestamp"`
 	UpdatedAt      time.Time
 	DeletedAt      gorm.DeletedAt `gorm:"index"`

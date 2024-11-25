@@ -2,7 +2,9 @@ package stories
 
 import (
 	"encoding/json"
+	"errors"
 	"gorm.io/gorm"
+	"hired-valley-backend/config"
 	"hired-valley-backend/controllers/authentication" // Импортируем authentication для проверки токенов
 	"hired-valley-backend/models/story"
 	"net/http"
@@ -11,7 +13,7 @@ import (
 )
 
 // Создание истории
-func CreateStory(w http.ResponseWriter, r *http.Request, db *gorm.DB) {
+func CreateStory(w http.ResponseWriter, r *http.Request) {
 	claims, err := authentication.ValidateToken(r)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusUnauthorized)
@@ -29,11 +31,16 @@ func CreateStory(w http.ResponseWriter, r *http.Request, db *gorm.DB) {
 		return
 	}
 
+	if newStory.ContentURL == "" {
+		http.Error(w, "ContentURL is required", http.StatusBadRequest)
+		return
+	}
+
 	newStory.UserID = claims.UserID
-	newStory.CreatedAt = time.Now()
+	newStory.CreatedAt = time.Now().UTC()
 	newStory.ExpireAt = newStory.CreatedAt.Add(24 * time.Hour)
 
-	if result := db.Create(&newStory); result.Error != nil {
+	if result := config.DB.Create(&newStory); result.Error != nil {
 		http.Error(w, "Failed to create story", http.StatusInternalServerError)
 		return
 	}
@@ -43,7 +50,7 @@ func CreateStory(w http.ResponseWriter, r *http.Request, db *gorm.DB) {
 }
 
 // Получение всех историй пользователя
-func GetUserStories(w http.ResponseWriter, r *http.Request, db *gorm.DB) {
+func GetUserStories(w http.ResponseWriter, r *http.Request) {
 	claims, err := authentication.ValidateToken(r)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusUnauthorized)
@@ -51,14 +58,14 @@ func GetUserStories(w http.ResponseWriter, r *http.Request, db *gorm.DB) {
 	}
 
 	var stories []story.Story
-	db.Where("user_id = ? AND expire_at > ? AND is_archived = ?", claims.UserID, time.Now(), false).Find(&stories)
+	config.DB.Where("user_id = ? AND expire_at > ? AND is_archived = ?", claims.UserID, time.Now().UTC(), false).Find(&stories)
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(stories)
 }
 
 // Просмотр истории
-func ViewStory(w http.ResponseWriter, r *http.Request, db *gorm.DB) {
+func ViewStory(w http.ResponseWriter, r *http.Request) {
 	claims, err := authentication.ValidateToken(r)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusUnauthorized)
@@ -73,7 +80,7 @@ func ViewStory(w http.ResponseWriter, r *http.Request, db *gorm.DB) {
 	}
 
 	var currentStory story.Story
-	if result := db.First(&currentStory, storyID); result.Error != nil {
+	if result := config.DB.First(&currentStory, storyID); errors.Is(result.Error, gorm.ErrRecordNotFound) {
 		http.Error(w, "Story not found", http.StatusNotFound)
 		return
 	}
@@ -83,15 +90,18 @@ func ViewStory(w http.ResponseWriter, r *http.Request, db *gorm.DB) {
 		return
 	}
 
-	currentStory.Views += 1
-	db.Save(&currentStory)
+	// Атомарное обновление просмотров
+	if err := config.DB.Model(&currentStory).UpdateColumn("views", gorm.Expr("views + ?", 1)).Error; err != nil {
+		http.Error(w, "Failed to update views", http.StatusInternalServerError)
+		return
+	}
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(currentStory)
 }
 
 // Архивирование истории
-func ArchiveStory(w http.ResponseWriter, r *http.Request, db *gorm.DB) {
+func ArchiveStory(w http.ResponseWriter, r *http.Request) {
 	claims, err := authentication.ValidateToken(r)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusUnauthorized)
@@ -106,7 +116,7 @@ func ArchiveStory(w http.ResponseWriter, r *http.Request, db *gorm.DB) {
 	}
 
 	var currentStory story.Story
-	if result := db.First(&currentStory, storyID); result.Error != nil {
+	if result := config.DB.First(&currentStory, storyID); errors.Is(result.Error, gorm.ErrRecordNotFound) {
 		http.Error(w, "Story not found", http.StatusNotFound)
 		return
 	}
@@ -117,7 +127,10 @@ func ArchiveStory(w http.ResponseWriter, r *http.Request, db *gorm.DB) {
 	}
 
 	currentStory.IsArchived = true
-	db.Save(&currentStory)
+	if err := config.DB.Save(&currentStory).Error; err != nil {
+		http.Error(w, "Failed to archive story", http.StatusInternalServerError)
+		return
+	}
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(currentStory)

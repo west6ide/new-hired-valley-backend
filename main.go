@@ -80,18 +80,10 @@ func main() {
 	http.HandleFunc("/list/lessons", course.ListLessons)
 	http.HandleFunc("/create/lessons", course.CreateLesson)
 
-	http.HandleFunc("/stories", func(w http.ResponseWriter, r *http.Request) {
-		stories.CreateStory(w, r, config.DB)
-	})
-	http.HandleFunc("/stories/view", func(w http.ResponseWriter, r *http.Request) {
-		stories.ViewStory(w, r, config.DB)
-	})
-	http.HandleFunc("/stories/archive", func(w http.ResponseWriter, r *http.Request) {
-		stories.ArchiveStory(w, r, config.DB)
-	})
-	http.HandleFunc("/stories/user", func(w http.ResponseWriter, r *http.Request) {
-		stories.GetUserStories(w, r, config.DB)
-	})
+	http.HandleFunc("/stories", stories.CreateStory)
+	http.HandleFunc("/stories/view", stories.ViewStory)
+	http.HandleFunc("/stories/archive", stories.ArchiveStory)
+	http.HandleFunc("/stories/user", stories.GetUserStories)
 
 	http.HandleFunc("/generate-recommendations", recommendations.GenerateRecommendationsHandler)
 	http.HandleFunc("/careersPlan", careers.GenerateCareerPlanHandler)

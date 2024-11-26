@@ -40,6 +40,8 @@ func main() {
 		&story.Story{},
 		&story.Reaction{},
 		&story.ViewStory{},
+		&story.Comment{},
+		&story.Notification{},
 		&recommend.Recommendation{},
 		&career.PlanCareer{},
 	)
@@ -84,6 +86,22 @@ func main() {
 	http.HandleFunc("/stories/view", stories.ViewStory)
 	http.HandleFunc("/stories/archive", stories.ArchiveStory)
 	http.HandleFunc("/stories/user", stories.GetUserStories)
+
+	http.HandleFunc("/stories/reactions/add", func(w http.ResponseWriter, r *http.Request) {
+		stories.AddReaction(w, r, config.DB)
+	})
+	http.HandleFunc("/stories/comments/add", func(w http.ResponseWriter, r *http.Request) {
+		stories.AddComment(w, r, config.DB)
+	})
+	http.HandleFunc("/stories/comments", func(w http.ResponseWriter, r *http.Request) {
+		stories.GetComments(w, r, config.DB)
+	})
+	http.HandleFunc("/notifications", func(w http.ResponseWriter, r *http.Request) {
+		stories.GetNotifications(w, r, config.DB)
+	})
+	http.HandleFunc("/notifications/read", func(w http.ResponseWriter, r *http.Request) {
+		stories.MarkNotificationAsRead(w, r, config.DB)
+	})
 
 	http.HandleFunc("/generate-recommendations", recommendations.GenerateRecommendationsHandler)
 	http.HandleFunc("/careersPlan", careers.GenerateCareerPlanHandler)

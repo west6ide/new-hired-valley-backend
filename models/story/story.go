@@ -14,6 +14,7 @@ type Story struct {
 	Views      uint       `gorm:"default:0"`          // Счетчик просмотров
 	Privacy    string     `gorm:"default:'public'"`   // Приватность (public, friends, private)
 	Reactions  []Reaction `gorm:"foreignKey:StoryID"` // Реакции пользователей
+	Comments   []Comment  `gorm:"foreignKey:StoryID"`
 }
 
 type Reaction struct {
@@ -21,6 +22,14 @@ type Reaction struct {
 	StoryID   uint      `gorm:"index;not null"`
 	UserID    uint      `gorm:"index;constraint:OnDelete:CASCADE;not null"`
 	Emoji     string    `gorm:"type:varchar(20);not null"` // Реакция (например, 😊, ❤️)
+	CreatedAt time.Time `gorm:"autoCreateTime"`
+}
+
+type Comment struct {
+	ID        uint      `gorm:"primaryKey"`
+	StoryID   uint      `gorm:"index;not null"`
+	UserID    uint      `gorm:"index;constraint:OnDelete:CASCADE;not null"`
+	Content   string    `gorm:"type:text;not null"` // Текст комментария
 	CreatedAt time.Time `gorm:"autoCreateTime"`
 }
 

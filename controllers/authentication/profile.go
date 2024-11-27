@@ -45,13 +45,12 @@ func UpdateProfile(w http.ResponseWriter, r *http.Request) {
 	// Начало транзакции
 	tx := config.DB.Begin()
 
-	// Обработка добавления навыков
+	// Обновление навыков
 	var updatedSkills []users.Skill
 	for _, skill := range updatedProfile.Skills {
 		var existingSkill users.Skill
 		if err := tx.Where("name = ?", skill.Name).First(&existingSkill).Error; err != nil {
 			if err == gorm.ErrRecordNotFound {
-				// Если навык не найден, создаем его
 				newSkill := users.Skill{Name: skill.Name}
 				if err := tx.Create(&newSkill).Error; err != nil {
 					tx.Rollback()
@@ -65,24 +64,23 @@ func UpdateProfile(w http.ResponseWriter, r *http.Request) {
 				return
 			}
 		} else {
-			// Добавляем уже существующий навык в список
 			updatedSkills = append(updatedSkills, existingSkill)
 		}
 	}
-	// Обновляем навыки пользователя
+
+	// Привязка обновленных навыков к пользователю
 	if err := tx.Model(&user).Association("Skills").Replace(updatedSkills); err != nil {
 		tx.Rollback()
 		http.Error(w, "Error updating skills", http.StatusInternalServerError)
 		return
 	}
 
-	// Обработка добавления интересов
+	// Обновление интересов
 	var updatedInterests []users.Interest
 	for _, interest := range updatedProfile.Interests {
 		var existingInterest users.Interest
 		if err := tx.Where("name = ?", interest.Name).First(&existingInterest).Error; err != nil {
 			if err == gorm.ErrRecordNotFound {
-				// Если интерес не найден, создаем его
 				newInterest := users.Interest{Name: interest.Name}
 				if err := tx.Create(&newInterest).Error; err != nil {
 					tx.Rollback()
@@ -96,26 +94,28 @@ func UpdateProfile(w http.ResponseWriter, r *http.Request) {
 				return
 			}
 		} else {
-			// Добавляем уже существующий интерес в список
 			updatedInterests = append(updatedInterests, existingInterest)
 		}
 	}
-	// Обновляем интересы пользователя
+
+	// Привязка обновленных интересов к пользователю
 	if err := tx.Model(&user).Association("Interests").Replace(updatedInterests); err != nil {
 		tx.Rollback()
 		http.Error(w, "Error updating interests", http.StatusInternalServerError)
 		return
 	}
 
-	// Обновляем остальные данные профиля
+	// Обновление других полей профиля
 	user.Position = updatedProfile.Position
 	user.City = updatedProfile.City
 	user.Income = updatedProfile.Income
 	user.Visibility = updatedProfile.Visibility
+	user.Company = updatedProfile.Company
+	user.Industry = updatedProfile.Industry
 
 	// Проверка и изменение роли (только для администраторов)
 	if claims.Role == "admin" {
-		if updatedProfile.Role == "user" || updatedProfile.Role == "instructor" || updatedProfile.Role == "admin" {
+		if updatedProfile.Role == "user" || updatedProfile.Role == "mentor" || updatedProfile.Role == "admin" {
 			user.Role = updatedProfile.Role
 		} else {
 			tx.Rollback()
@@ -123,7 +123,7 @@ func UpdateProfile(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	} else {
-		// Если текущий пользователь не администратор, запрещаем изменение роли
+		// Запрет на изменение роли для обычных пользователей
 		if updatedProfile.Role != "" && updatedProfile.Role != user.Role {
 			tx.Rollback()
 			http.Error(w, "Only admin can change role", http.StatusForbidden)
@@ -131,6 +131,7 @@ func UpdateProfile(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	// Сохранение обновленного пользователя
 	if err := tx.Save(&user).Error; err != nil {
 		tx.Rollback()
 		http.Error(w, "Error updating profile", http.StatusInternalServerError)
@@ -140,6 +141,7 @@ func UpdateProfile(w http.ResponseWriter, r *http.Request) {
 	// Коммит транзакции
 	tx.Commit()
 
+	// Возврат обновленного профиля
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(user)
 }

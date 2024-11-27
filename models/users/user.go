@@ -11,6 +11,8 @@ type User struct {
 	Name               string        `json:"name"`
 	Email              string        `json:"email" gorm:"unique;not null"`
 	Password           string        `json:"-" gorm:"not null"`
+	Company            string        `json:"company"`
+	Industry           string        `json:"industry"`
 	Position           string        `json:"position"`
 	City               string        `json:"city"`
 	Income             int           `json:"income"`

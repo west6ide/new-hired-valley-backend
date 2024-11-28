@@ -49,8 +49,13 @@ func GetCourseByID(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Получение ID из URL
-	idStr := strings.TrimPrefix(r.URL.Path, "/courses/")
+	// Получение ID из параметров запроса
+	idStr := r.URL.Query().Get("id")
+	if idStr == "" {
+		http.Error(w, "Course ID is required", http.StatusBadRequest)
+		return
+	}
+
 	id, err := strconv.Atoi(idStr)
 	if err != nil {
 		http.Error(w, "Invalid course ID", http.StatusBadRequest)

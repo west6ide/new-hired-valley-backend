@@ -62,47 +62,83 @@ func main() {
 		log.Println("Подключение к базе данных успешно")
 	}
 
+	// authorization endpoints
 	http.HandleFunc("/", handleHome)
 	http.HandleFunc("/login/google", authentication.HandleGoogleLogin)
 	http.HandleFunc("/callback/google", authentication.HandleGoogleCallback)
 	http.HandleFunc("/login/linkedin", authentication.HandleLinkedInLogin)
 	http.HandleFunc("/callback/linkedin", authentication.HandleLinkedInCallback)
-
 	http.HandleFunc("/register", authentication.Register)
 	http.HandleFunc("/login", authentication.Login)
 	http.HandleFunc("/profile", authentication.GetProfile)
 	http.HandleFunc("/logout", authentication.Logout)
 
+	//users profile endpoints
 	http.HandleFunc("/profile/update", authentication.UpdateProfile)
 	http.HandleFunc("/users/search", authentication.SearchUsers)
 
+	//courses endpoints
 	http.HandleFunc("/list/courses", course.ListCourses)
 	http.HandleFunc("/create/courses", course.CreateCourse)
-	http.HandleFunc("/upload-video-to-lesson", course.UploadVideoToLesson)
+	http.HandleFunc("/get/courses", course.GetCourseByID)
+	http.HandleFunc("/update/courses", course.UpdateCourse)
+	http.HandleFunc("/delete/courses", course.DeleteCourse)
+
+	//lessons endpoints
 	http.HandleFunc("/list/lessons", course.ListLessons)
 	http.HandleFunc("/create/lessons", course.CreateLesson)
+	http.HandleFunc("/get/lessons", course.GetLessonByID)
+	http.HandleFunc("/update/lessons", course.UpdateLesson)
+	http.HandleFunc("/delete/lessons", course.DeleteLesson)
 
-	http.HandleFunc("/stories", stories.CreateStory)
+	//stories endpoints
+	http.HandleFunc("/create/stories", stories.CreateStory)
+	http.HandleFunc("/stories/get/user", stories.GetUserStories)
+	http.HandleFunc("/update/stories", stories.UpdateStory)
+	http.HandleFunc("/delete/stories", stories.DeleteStory)
 	http.HandleFunc("/stories/view", stories.ViewStory)
 	http.HandleFunc("/stories/archive", stories.ArchiveStory)
-	http.HandleFunc("/stories/user", stories.GetUserStories)
 
-	http.HandleFunc("/stories/reactions/add", func(w http.ResponseWriter, r *http.Request) {
+	//reactions endpoints
+	http.HandleFunc("/add/stories/reactions", func(w http.ResponseWriter, r *http.Request) {
 		stories.AddReaction(w, r, config.DB)
 	})
-	http.HandleFunc("/stories/comments/add", func(w http.ResponseWriter, r *http.Request) {
-		stories.AddComment(w, r, config.DB)
+	http.HandleFunc("/get/stories/reactions", func(w http.ResponseWriter, r *http.Request) {
+		stories.GetReactions(w, r, config.DB)
 	})
-	http.HandleFunc("/stories/comments", func(w http.ResponseWriter, r *http.Request) {
+	http.HandleFunc("/update/stories/reactions", func(w http.ResponseWriter, r *http.Request) {
+		stories.UpdateReaction(w, r, config.DB)
+	})
+	http.HandleFunc("/delete/stories/reactions", func(w http.ResponseWriter, r *http.Request) {
+		stories.DeleteReaction(w, r, config.DB)
+	})
+
+	// comments endpoints
+	http.HandleFunc("/create/stories/comments", func(w http.ResponseWriter, r *http.Request) {
+		stories.CreateComment(w, r, config.DB)
+	})
+	http.HandleFunc("/get/stories/comments", func(w http.ResponseWriter, r *http.Request) {
 		stories.GetComments(w, r, config.DB)
 	})
-	http.HandleFunc("/notifications", func(w http.ResponseWriter, r *http.Request) {
+	http.HandleFunc("/update/stories/comments", func(w http.ResponseWriter, r *http.Request) {
+		stories.UpdateComment(w, r, config.DB)
+	})
+	http.HandleFunc("/delete/stories/comments", func(w http.ResponseWriter, r *http.Request) {
+		stories.DeleteComment(w, r, config.DB)
+	})
+
+	//notifications endpoints
+	http.HandleFunc("/get/notifications", func(w http.ResponseWriter, r *http.Request) {
 		stories.GetNotifications(w, r, config.DB)
 	})
 	http.HandleFunc("/notifications/read", func(w http.ResponseWriter, r *http.Request) {
 		stories.MarkNotificationAsRead(w, r, config.DB)
 	})
+	http.HandleFunc("/delete/notifications", func(w http.ResponseWriter, r *http.Request) {
+		stories.DeleteNotification(w, r, config.DB)
+	})
 
+	// AI  endpoints
 	http.HandleFunc("/generate-recommendations", recommendations.GenerateRecommendationsHandler)
 	http.HandleFunc("/careersPlan", careers.GenerateCareerPlanHandler)
 

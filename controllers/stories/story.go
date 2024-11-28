@@ -3,10 +3,9 @@ package stories
 import (
 	"encoding/json"
 	"errors"
-	"fmt"
 	"gorm.io/gorm"
 	"hired-valley-backend/config"
-	"hired-valley-backend/controllers/authentication" // Импортируем authentication для проверки токенов
+	"hired-valley-backend/controllers/authentication"
 	"hired-valley-backend/models/story"
 	"net/http"
 	"strconv"
@@ -65,7 +64,7 @@ func GetUserStories(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(stories)
 }
 
-// Просмотр истории
+// Просмотр одной истории
 func ViewStory(w http.ResponseWriter, r *http.Request) {
 	claims, err := authentication.ValidateToken(r)
 	if err != nil {
@@ -137,138 +136,95 @@ func ArchiveStory(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(currentStory)
 }
 
-// Helper to send notifications
-func sendNotification(db *gorm.DB, userID uint, message string) {
-	notification := story.Notification{
-		UserID:    userID,
-		Message:   message,
-		CreatedAt: time.Now().UTC(),
-	}
-	db.Create(&notification)
-}
-
-// Add reaction to a story
-func AddReaction(w http.ResponseWriter, r *http.Request, db *gorm.DB) {
+// UpdateStory - обновление информации об истории
+func UpdateStory(w http.ResponseWriter, r *http.Request) {
 	claims, err := authentication.ValidateToken(r)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusUnauthorized)
 		return
 	}
 
-	if r.Method != http.MethodPost {
+	if r.Method != http.MethodPut {
 		http.Error(w, "Invalid request method", http.StatusMethodNotAllowed)
 		return
 	}
 
-	var reaction story.Reaction
-	if err := json.NewDecoder(r.Body).Decode(&reaction); err != nil {
-		http.Error(w, "Bad request", http.StatusBadRequest)
-		return
-	}
-
-	reaction.UserID = claims.UserID
-	reaction.CreatedAt = time.Now().UTC()
-
-	if result := db.Create(&reaction); result.Error != nil {
-		http.Error(w, "Failed to add reaction", http.StatusInternalServerError)
-		return
-	}
-
-	// Notify story owner
-	var storyOwner story.Story
-	if err := db.First(&storyOwner, reaction.StoryID).Error; err == nil {
-		sendNotification(db, storyOwner.UserID, fmt.Sprintf("User %d reacted to your story", claims.UserID))
-	}
-
-	w.WriteHeader(http.StatusCreated)
-	json.NewEncoder(w).Encode(reaction)
-}
-
-// Add comment to a story
-func AddComment(w http.ResponseWriter, r *http.Request, db *gorm.DB) {
-	claims, err := authentication.ValidateToken(r)
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusUnauthorized)
-		return
-	}
-
-	if r.Method != http.MethodPost {
-		http.Error(w, "Invalid request method", http.StatusMethodNotAllowed)
-		return
-	}
-
-	var comment story.Comment
-	if err := json.NewDecoder(r.Body).Decode(&comment); err != nil {
-		http.Error(w, "Bad request", http.StatusBadRequest)
-		return
-	}
-
-	comment.UserID = claims.UserID
-	comment.CreatedAt = time.Now().UTC()
-
-	if result := db.Create(&comment); result.Error != nil {
-		http.Error(w, "Failed to add comment", http.StatusInternalServerError)
-		return
-	}
-
-	// Notify story owner
-	var storyOwner story.Story
-	if err := db.First(&storyOwner, comment.StoryID).Error; err == nil {
-		sendNotification(db, storyOwner.UserID, fmt.Sprintf("User %d commented on your story", claims.UserID))
-	}
-
-	w.WriteHeader(http.StatusCreated)
-	json.NewEncoder(w).Encode(comment)
-}
-
-// Get comments for a story
-func GetComments(w http.ResponseWriter, r *http.Request, db *gorm.DB) {
-	storyIDStr := r.URL.Query().Get("story_id")
+	storyIDStr := r.URL.Query().Get("id")
 	storyID, err := strconv.Atoi(storyIDStr)
 	if err != nil {
 		http.Error(w, "Invalid story ID", http.StatusBadRequest)
 		return
 	}
 
-	var comments []story.Comment
-	db.Where("story_id = ?", storyID).Find(&comments)
+	var currentStory story.Story
+	if result := config.DB.First(&currentStory, storyID); errors.Is(result.Error, gorm.ErrRecordNotFound) {
+		http.Error(w, "Story not found", http.StatusNotFound)
+		return
+	}
+
+	if currentStory.UserID != claims.UserID {
+		http.Error(w, "Forbidden", http.StatusForbidden)
+		return
+	}
+
+	if time.Now().After(currentStory.ExpireAt) {
+		http.Error(w, "Cannot update an expired story", http.StatusBadRequest)
+		return
+	}
+
+	var updatedStory story.Story
+	if err := json.NewDecoder(r.Body).Decode(&updatedStory); err != nil {
+		http.Error(w, "Invalid input", http.StatusBadRequest)
+		return
+	}
+
+	// Обновляем только разрешенные поля
+	if updatedStory.ContentURL != "" {
+		currentStory.ContentURL = updatedStory.ContentURL
+	}
+	if updatedStory.Privacy != "" {
+		currentStory.Privacy = updatedStory.Privacy
+	}
+
+	if err := config.DB.Save(&currentStory).Error; err != nil {
+		http.Error(w, "Failed to update story", http.StatusInternalServerError)
+		return
+	}
 
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(comments)
+	json.NewEncoder(w).Encode(currentStory)
 }
 
-// Get notifications for the user
-func GetNotifications(w http.ResponseWriter, r *http.Request, db *gorm.DB) {
+// Удаление истории
+func DeleteStory(w http.ResponseWriter, r *http.Request) {
 	claims, err := authentication.ValidateToken(r)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusUnauthorized)
 		return
 	}
 
-	var notifications []story.Notification
-	db.Where("user_id = ?", claims.UserID).Find(&notifications)
-
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(notifications)
-}
-
-// Mark notification as read
-func MarkNotificationAsRead(w http.ResponseWriter, r *http.Request, db *gorm.DB) {
-	claims, err := authentication.ValidateToken(r)
+	storyIDStr := r.URL.Query().Get("id")
+	storyID, err := strconv.Atoi(storyIDStr)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusUnauthorized)
+		http.Error(w, "Invalid story ID", http.StatusBadRequest)
 		return
 	}
 
-	notificationIDStr := r.URL.Query().Get("id")
-	notificationID, err := strconv.Atoi(notificationIDStr)
-	if err != nil {
-		http.Error(w, "Invalid notification ID", http.StatusBadRequest)
+	var currentStory story.Story
+	if result := config.DB.First(&currentStory, storyID); errors.Is(result.Error, gorm.ErrRecordNotFound) {
+		http.Error(w, "Story not found", http.StatusNotFound)
 		return
 	}
 
-	db.Model(&story.Notification{}).Where("id = ? AND user_id = ?", notificationID, claims.UserID).
-		Update("is_read", true)
+	if currentStory.UserID != claims.UserID {
+		http.Error(w, "Forbidden", http.StatusForbidden)
+		return
+	}
 
-	w.WriteHeader(http.StatusOK)
+	if err := config.DB.Delete(&currentStory).Error; err != nil {
+		http.Error(w, "Failed to delete story", http.StatusInternalServerError)
+		return
+	}
+
+	w.WriteHeader(http.StatusNoContent)
 }

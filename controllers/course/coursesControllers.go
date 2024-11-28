@@ -165,16 +165,25 @@ func UpdateCourse(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var updatedCourse courses.Course
-	if err := json.NewDecoder(r.Body).Decode(&updatedCourse); err != nil {
+	// Декодируем обновляемые данные
+	var updates map[string]interface{}
+	if err := json.NewDecoder(r.Body).Decode(&updates); err != nil {
 		http.Error(w, "Invalid input", http.StatusBadRequest)
 		return
 	}
 
-	course.Title = updatedCourse.Title
-	course.Description = updatedCourse.Description
-	course.Price = updatedCourse.Price
+	// Обновляем только те поля, которые были переданы
+	if title, ok := updates["title"].(string); ok {
+		course.Title = title
+	}
+	if description, ok := updates["description"].(string); ok {
+		course.Description = description
+	}
+	if price, ok := updates["price"].(float64); ok {
+		course.Price = price
+	}
 
+	// Сохраняем обновления
 	if err := config.DB.Save(&course).Error; err != nil {
 		http.Error(w, "Failed to update course", http.StatusInternalServerError)
 		return

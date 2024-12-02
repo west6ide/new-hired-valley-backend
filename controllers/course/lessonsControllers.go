@@ -97,40 +97,58 @@ func CreateLesson(w http.ResponseWriter, r *http.Request) {
 
 // UpdateLesson - обновление урока
 func UpdateLesson(w http.ResponseWriter, r *http.Request) {
+	// Проверка токена и роли
 	claims, err := authentication.ValidateToken(r)
 	if err != nil || claims.Role != "mentor" {
 		http.Error(w, "Unauthorized or forbidden", http.StatusUnauthorized)
 		return
 	}
 
-	lessonIDStr := strings.TrimPrefix(r.URL.Path, "/lessons/")
+	// Извлечение ID урока из параметров запроса
+	lessonIDStr := r.URL.Query().Get("id")
+	if lessonIDStr == "" {
+		http.Error(w, "Lesson ID is required", http.StatusBadRequest)
+		return
+	}
+
 	lessonID, err := strconv.Atoi(lessonIDStr)
 	if err != nil || lessonID <= 0 {
 		http.Error(w, "Invalid lesson ID", http.StatusBadRequest)
 		return
 	}
 
+	// Поиск урока в базе данных
 	var lesson courses.Lesson
 	if err := config.DB.First(&lesson, uint(lessonID)).Error; err != nil {
 		http.Error(w, "Lesson not found", http.StatusNotFound)
 		return
 	}
 
+	// Проверка прав владельца
 	if lesson.InstructorID != claims.UserID {
 		http.Error(w, "Permission denied", http.StatusForbidden)
 		return
 	}
 
-	if err := json.NewDecoder(r.Body).Decode(&lesson); err != nil {
+	// Декодирование обновленных данных урока
+	var updatedLesson courses.Lesson
+	if err := json.NewDecoder(r.Body).Decode(&updatedLesson); err != nil {
 		http.Error(w, "Invalid input", http.StatusBadRequest)
 		return
 	}
 
+	// Обновление данных урока
+	lesson.Title = updatedLesson.Title
+	lesson.Content = updatedLesson.Content
+	lesson.VideoLink = updatedLesson.VideoLink
+
+	// Сохранение обновленных данных
 	if err := config.DB.Save(&lesson).Error; err != nil {
 		http.Error(w, "Failed to update lesson", http.StatusInternalServerError)
 		return
 	}
 
+	// Возврат ответа
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(lesson)
 }

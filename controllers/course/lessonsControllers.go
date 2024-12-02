@@ -1,12 +1,18 @@
 package course
 
 import (
+	"context"
 	"encoding/json"
-	"github.com/dgrijalva/jwt-go"
+	"errors"
+	"fmt"
+	"google.golang.org/api/option"
+	"google.golang.org/api/youtube/v3"
 	"hired-valley-backend/config"
 	"hired-valley-backend/controllers/authentication"
 	"hired-valley-backend/models/courses"
+	"mime/multipart"
 	"net/http"
+	"os"
 	"strconv"
 	"strings"
 )
@@ -61,29 +67,9 @@ func GetLessonByID(w http.ResponseWriter, r *http.Request) {
 
 // CreateLesson - создание нового урока
 func CreateLesson(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodPost {
-		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
-		return
-	}
-
-	authHeader := r.Header.Get("Authorization")
-	if authHeader == "" {
-		http.Error(w, "Authorization header required", http.StatusUnauthorized)
-		return
-	}
-
-	tokenString := strings.TrimPrefix(authHeader, "Bearer ")
-	claims := &authentication.Claims{}
-	token, err := jwt.ParseWithClaims(tokenString, claims, func(token *jwt.Token) (interface{}, error) {
-		return []byte(authentication.JwtKey), nil
-	})
-	if err != nil || !token.Valid {
-		http.Error(w, "Invalid token", http.StatusUnauthorized)
-		return
-	}
-
-	if claims.Role != "mentor" {
-		http.Error(w, "Only mentors can create lessons", http.StatusForbidden)
+	claims, err := authentication.ValidateToken(r)
+	if err != nil || claims.Role != "mentor" {
+		http.Error(w, "Unauthorized or forbidden", http.StatusUnauthorized)
 		return
 	}
 
@@ -93,6 +79,7 @@ func CreateLesson(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	lesson.InstructorID = claims.UserID
 	if err := config.DB.Create(&lesson).Error; err != nil {
 		http.Error(w, "Failed to create lesson", http.StatusInternalServerError)
 		return
@@ -105,8 +92,9 @@ func CreateLesson(w http.ResponseWriter, r *http.Request) {
 
 // UpdateLesson - обновление урока
 func UpdateLesson(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodPut {
-		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+	claims, err := authentication.ValidateToken(r)
+	if err != nil || claims.Role != "mentor" {
+		http.Error(w, "Unauthorized or forbidden", http.StatusUnauthorized)
 		return
 	}
 
@@ -117,42 +105,21 @@ func UpdateLesson(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	authHeader := r.Header.Get("Authorization")
-	if authHeader == "" {
-		http.Error(w, "Authorization header required", http.StatusUnauthorized)
-		return
-	}
-
-	tokenString := strings.TrimPrefix(authHeader, "Bearer ")
-	claims := &authentication.Claims{}
-	token, err := jwt.ParseWithClaims(tokenString, claims, func(token *jwt.Token) (interface{}, error) {
-		return []byte(authentication.JwtKey), nil
-	})
-	if err != nil || !token.Valid {
-		http.Error(w, "Invalid token", http.StatusUnauthorized)
-		return
-	}
-
 	var lesson courses.Lesson
 	if err := config.DB.First(&lesson, uint(lessonID)).Error; err != nil {
 		http.Error(w, "Lesson not found", http.StatusNotFound)
 		return
 	}
 
-	if claims.Role != "mentor" || claims.UserID != lesson.InstructorID {
+	if lesson.InstructorID != claims.UserID {
 		http.Error(w, "Permission denied", http.StatusForbidden)
 		return
 	}
 
-	var updatedLesson courses.Lesson
-	if err := json.NewDecoder(r.Body).Decode(&updatedLesson); err != nil {
+	if err := json.NewDecoder(r.Body).Decode(&lesson); err != nil {
 		http.Error(w, "Invalid input", http.StatusBadRequest)
 		return
 	}
-
-	lesson.Title = updatedLesson.Title
-	lesson.Content = updatedLesson.Content
-	lesson.VimeoVideoLink = updatedLesson.VimeoVideoLink
 
 	if err := config.DB.Save(&lesson).Error; err != nil {
 		http.Error(w, "Failed to update lesson", http.StatusInternalServerError)
@@ -165,8 +132,9 @@ func UpdateLesson(w http.ResponseWriter, r *http.Request) {
 
 // DeleteLesson - удаление урока
 func DeleteLesson(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodDelete {
-		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+	claims, err := authentication.ValidateToken(r)
+	if err != nil || claims.Role != "mentor" {
+		http.Error(w, "Unauthorized or forbidden", http.StatusUnauthorized)
 		return
 	}
 
@@ -177,29 +145,13 @@ func DeleteLesson(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	authHeader := r.Header.Get("Authorization")
-	if authHeader == "" {
-		http.Error(w, "Authorization header required", http.StatusUnauthorized)
-		return
-	}
-
-	tokenString := strings.TrimPrefix(authHeader, "Bearer ")
-	claims := &authentication.Claims{}
-	token, err := jwt.ParseWithClaims(tokenString, claims, func(token *jwt.Token) (interface{}, error) {
-		return []byte(authentication.JwtKey), nil
-	})
-	if err != nil || !token.Valid {
-		http.Error(w, "Invalid token", http.StatusUnauthorized)
-		return
-	}
-
 	var lesson courses.Lesson
 	if err := config.DB.First(&lesson, uint(lessonID)).Error; err != nil {
 		http.Error(w, "Lesson not found", http.StatusNotFound)
 		return
 	}
 
-	if claims.Role != "mentor" || claims.UserID != lesson.InstructorID {
+	if lesson.InstructorID != claims.UserID {
 		http.Error(w, "Permission denied", http.StatusForbidden)
 		return
 	}
@@ -210,4 +162,95 @@ func DeleteLesson(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.WriteHeader(http.StatusNoContent)
+}
+
+// UploadVideoToLesson - загрузка видео на YouTube и сохранение ссылки в Lesson
+func UploadVideoToLesson(w http.ResponseWriter, r *http.Request) {
+	claims, err := authentication.ValidateToken(r)
+	if err != nil || claims.Role != "mentor" {
+		http.Error(w, "Unauthorized or forbidden", http.StatusUnauthorized)
+		return
+	}
+
+	lessonIDStr := r.URL.Query().Get("lesson_id")
+	if lessonIDStr == "" {
+		http.Error(w, "Lesson ID is required", http.StatusBadRequest)
+		return
+	}
+
+	lessonID, err := strconv.Atoi(lessonIDStr)
+	if err != nil || lessonID <= 0 {
+		http.Error(w, "Invalid lesson ID", http.StatusBadRequest)
+		return
+	}
+
+	var lesson courses.Lesson
+	if err := config.DB.First(&lesson, uint(lessonID)).Error; err != nil {
+		http.Error(w, "Lesson not found", http.StatusNotFound)
+		return
+	}
+
+	if lesson.InstructorID != claims.UserID {
+		http.Error(w, "Permission denied", http.StatusForbidden)
+		return
+	}
+
+	file, header, err := r.FormFile("video")
+	if err != nil {
+		http.Error(w, "Failed to read video file", http.StatusBadRequest)
+		return
+	}
+	defer file.Close()
+
+	videoID, err := uploadVideoToYouTube(file, header.Filename)
+	if err != nil {
+		http.Error(w, "Failed to upload video to YouTube: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	lesson.VideoLink = fmt.Sprintf("https://www.youtube.com/watch?v=%s", videoID)
+	if err := config.DB.Save(&lesson).Error; err != nil {
+		http.Error(w, "Failed to save lesson", http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]string{
+		"message":   "Video uploaded successfully",
+		"video_url": lesson.VideoLink,
+		"lesson_id": lessonIDStr,
+		"video_id":  videoID,
+	})
+}
+
+// uploadVideoToYouTube - загрузка видео на YouTube
+func uploadVideoToYouTube(file multipart.File, fileName string) (string, error) {
+	creds := os.Getenv("GOOGLE_APPLICATION_CREDENTIALS_JSON")
+	if creds == "" {
+		return "", errors.New("missing GOOGLE_APPLICATION_CREDENTIALS_JSON environment variable")
+	}
+
+	ctx := context.Background()
+	service, err := youtube.NewService(ctx, option.WithCredentialsJSON([]byte(creds)))
+	if err != nil {
+		return "", fmt.Errorf("failed to create YouTube service: %v", err)
+	}
+
+	video := &youtube.Video{
+		Snippet: &youtube.VideoSnippet{
+			Title:       "Lesson Video",
+			Description: "Uploaded via the Hired Valley platform",
+		},
+		Status: &youtube.VideoStatus{
+			PrivacyStatus: "unlisted",
+		},
+	}
+
+	call := service.Videos.Insert([]string{"snippet", "status"}, video)
+	response, err := call.Media(file).Do()
+	if err != nil {
+		return "", fmt.Errorf("failed to upload video: %v", err)
+	}
+
+	return response.Id, nil
 }

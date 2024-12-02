@@ -48,7 +48,12 @@ func GetLessonByID(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	lessonIDStr := strings.TrimPrefix(r.URL.Path, "/lessons/")
+	lessonIDStr := r.URL.Query().Get("id")
+	if lessonIDStr == "" {
+		http.Error(w, "Lesson ID is required", http.StatusBadRequest)
+		return
+	}
+
 	lessonID, err := strconv.Atoi(lessonIDStr)
 	if err != nil || lessonID <= 0 {
 		http.Error(w, "Invalid lesson ID", http.StatusBadRequest)

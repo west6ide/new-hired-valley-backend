@@ -90,6 +90,7 @@ func main() {
 	http.HandleFunc("/get/lessons", course.GetLessonByID)
 	http.HandleFunc("/update/lessons", course.UpdateLesson)
 	http.HandleFunc("/delete/lessons", course.DeleteLesson)
+	http.HandleFunc("/upload-video-to-lesson", course.UploadVideoToLesson)
 
 	//stories endpoints
 	http.HandleFunc("/create/stories", stories.CreateStory)

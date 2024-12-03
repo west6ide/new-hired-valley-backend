@@ -3,17 +3,22 @@ package course
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
+	"golang.org/x/oauth2"
 	"google.golang.org/api/option"
 	"google.golang.org/api/youtube/v3"
 	"hired-valley-backend/config"
 	"hired-valley-backend/controllers/authentication"
 	"hired-valley-backend/models/courses"
+	"hired-valley-backend/models/users"
 	"mime/multipart"
 	"net/http"
-	"os"
 	"strconv"
+	"time"
+)
+
+var (
+	oauthToken string
 )
 
 // ListLessons - получение всех уроков курса
@@ -36,6 +41,7 @@ func ListLessons(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
 	json.NewEncoder(w).Encode(lessons)
 }
@@ -66,6 +72,7 @@ func GetLessonByID(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
 	json.NewEncoder(w).Encode(lesson)
 }
 
@@ -96,14 +103,12 @@ func CreateLesson(w http.ResponseWriter, r *http.Request) {
 
 // UpdateLesson - обновление урока
 func UpdateLesson(w http.ResponseWriter, r *http.Request) {
-	// Проверка токена и роли
 	claims, err := authentication.ValidateToken(r)
 	if err != nil || claims.Role != "mentor" {
 		http.Error(w, "Unauthorized or forbidden", http.StatusUnauthorized)
 		return
 	}
 
-	// Извлечение ID урока из параметров запроса
 	lessonIDStr := r.URL.Query().Get("id")
 	if lessonIDStr == "" {
 		http.Error(w, "Lesson ID is required", http.StatusBadRequest)
@@ -116,52 +121,39 @@ func UpdateLesson(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Поиск урока в базе данных
 	var lesson courses.Lesson
 	if err := config.DB.First(&lesson, uint(lessonID)).Error; err != nil {
 		http.Error(w, "Lesson not found", http.StatusNotFound)
 		return
 	}
 
-	// Проверка прав владельца
 	if lesson.InstructorID != claims.UserID {
 		http.Error(w, "Permission denied", http.StatusForbidden)
 		return
 	}
 
-	// Декодирование обновленных данных урока
-	var updatedLesson courses.Lesson
-	if err := json.NewDecoder(r.Body).Decode(&updatedLesson); err != nil {
+	if err := json.NewDecoder(r.Body).Decode(&lesson); err != nil {
 		http.Error(w, "Invalid input", http.StatusBadRequest)
 		return
 	}
 
-	// Обновление данных урока
-	lesson.Title = updatedLesson.Title
-	lesson.Content = updatedLesson.Content
-	lesson.VideoLink = updatedLesson.VideoLink
-
-	// Сохранение обновленных данных
 	if err := config.DB.Save(&lesson).Error; err != nil {
 		http.Error(w, "Failed to update lesson", http.StatusInternalServerError)
 		return
 	}
 
-	// Возврат ответа
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(lesson)
 }
 
 // DeleteLesson - удаление урока
 func DeleteLesson(w http.ResponseWriter, r *http.Request) {
-	// Проверка токена и роли
 	claims, err := authentication.ValidateToken(r)
 	if err != nil || claims.Role != "mentor" {
 		http.Error(w, "Unauthorized or forbidden", http.StatusUnauthorized)
 		return
 	}
 
-	// Извлечение ID урока из параметров запроса
 	lessonIDStr := r.URL.Query().Get("id")
 	if lessonIDStr == "" {
 		http.Error(w, "Lesson ID is required", http.StatusBadRequest)
@@ -174,26 +166,22 @@ func DeleteLesson(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Поиск урока в базе данных
 	var lesson courses.Lesson
 	if err := config.DB.First(&lesson, uint(lessonID)).Error; err != nil {
 		http.Error(w, "Lesson not found", http.StatusNotFound)
 		return
 	}
 
-	// Проверка прав владельца
 	if lesson.InstructorID != claims.UserID {
 		http.Error(w, "Permission denied", http.StatusForbidden)
 		return
 	}
 
-	// Удаление урока
 	if err := config.DB.Delete(&lesson).Error; err != nil {
 		http.Error(w, "Failed to delete lesson", http.StatusInternalServerError)
 		return
 	}
 
-	// Успешный ответ
 	w.WriteHeader(http.StatusNoContent)
 }
 
@@ -228,6 +216,14 @@ func UploadVideoToLesson(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Получаем YouTube токены из базы данных
+	var youtubeUser users.YoutubeUser
+	if err := config.DB.Where("user_id = ?", claims.UserID).First(&youtubeUser).Error; err != nil {
+		http.Error(w, "Google user not found", http.StatusUnauthorized)
+		return
+	}
+
+	// Читаем видео из формы
 	file, header, err := r.FormFile("video")
 	if err != nil {
 		http.Error(w, "Failed to read video file", http.StatusBadRequest)
@@ -235,12 +231,14 @@ func UploadVideoToLesson(w http.ResponseWriter, r *http.Request) {
 	}
 	defer file.Close()
 
-	videoID, err := uploadVideoToYouTube(file, header.Filename)
+	// Загрузка видео на YouTube
+	videoID, err := uploadVideoToYouTube(file, header.Filename, youtubeUser.AccessToken, youtubeUser.RefreshToken, youtubeUser.Expiry)
 	if err != nil {
 		http.Error(w, "Failed to upload video to YouTube: "+err.Error(), http.StatusInternalServerError)
 		return
 	}
 
+	// Обновляем информацию об уроке
 	lesson.VideoLink = fmt.Sprintf("https://www.youtube.com/watch?v=%s", videoID)
 	if err := config.DB.Save(&lesson).Error; err != nil {
 		http.Error(w, "Failed to save lesson", http.StatusInternalServerError)
@@ -256,29 +254,37 @@ func UploadVideoToLesson(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-// uploadVideoToYouTube - загрузка видео на YouTube
-func uploadVideoToYouTube(file multipart.File, fileName string) (string, error) {
-	creds := os.Getenv("GOOGLE_APPLICATION_CREDENTIALS_JSON")
-	if creds == "" {
-		return "", errors.New("missing GOOGLE_APPLICATION_CREDENTIALS_JSON environment variable")
+func uploadVideoToYouTube(file multipart.File, fileName string, accessToken string, refreshToken string, expiry time.Time) (string, error) {
+	ctx := context.Background()
+
+	// Создаем токен вручную
+	token := &oauth2.Token{
+		AccessToken:  accessToken,
+		RefreshToken: refreshToken,
+		Expiry:       expiry,
 	}
 
-	ctx := context.Background()
-	service, err := youtube.NewService(ctx, option.WithCredentialsJSON([]byte(creds)))
+	// Создаем TokenSource для автоматического обновления токенов
+	tokenSource := authentication.GoogleOauthConfig.TokenSource(ctx, token)
+
+	// Создаем сервис YouTube
+	service, err := youtube.NewService(ctx, option.WithTokenSource(tokenSource))
 	if err != nil {
 		return "", fmt.Errorf("failed to create YouTube service: %v", err)
 	}
 
+	// Подготавливаем метаданные видео
 	video := &youtube.Video{
 		Snippet: &youtube.VideoSnippet{
-			Title:       "Lesson Video",
-			Description: "Uploaded via the Hired Valley platform",
+			Title:       fileName,
+			Description: "Uploaded via Hired Valley platform",
 		},
 		Status: &youtube.VideoStatus{
 			PrivacyStatus: "unlisted",
 		},
 	}
 
+	// Загрузка видео
 	call := service.Videos.Insert([]string{"snippet", "status"}, video)
 	response, err := call.Media(file).Do()
 	if err != nil {

@@ -15,11 +15,11 @@ import (
 )
 
 var (
-	googleOauthConfig = &oauth2.Config{
+	GoogleOauthConfig = &oauth2.Config{
 		RedirectURL:  os.Getenv("GOOGLE_REDIRECT_URL"),
 		ClientID:     os.Getenv("GOOGLE_CLIENT_ID"),
 		ClientSecret: os.Getenv("GOOGLE_CLIENT_SECRET"),
-		Scopes:       []string{"https://www.googleapis.com/auth/userinfo.email", "https://www.googleapis.com/auth/userinfo.profile"},
+		Scopes:       []string{"https://www.googleapis.com/auth/youtube.upload", "https://www.googleapis.com/auth/userinfo.email", "https://www.googleapis.com/auth/userinfo.profile"},
 		Endpoint:     google.Endpoint,
 	}
 	store = sessions.NewCookieStore([]byte(os.Getenv("SESSION_SECRET")))
@@ -27,7 +27,7 @@ var (
 
 func init() {
 	// Проверка, что все переменные окружения заданы
-	if googleOauthConfig.ClientID == "" || googleOauthConfig.ClientSecret == "" || googleOauthConfig.RedirectURL == "" {
+	if GoogleOauthConfig.ClientID == "" || GoogleOauthConfig.ClientSecret == "" || GoogleOauthConfig.RedirectURL == "" {
 		log.Fatal("Не установлены переменные окружения для Google OAuth")
 	}
 
@@ -44,7 +44,7 @@ func init() {
 // HandleGoogleLogin initiates Google OAuth login
 func HandleGoogleLogin(w http.ResponseWriter, r *http.Request) {
 	state := "google"
-	url := googleOauthConfig.AuthCodeURL(state)
+	url := GoogleOauthConfig.AuthCodeURL(state)
 	http.Redirect(w, r, url, http.StatusTemporaryRedirect)
 }
 
@@ -57,7 +57,7 @@ func HandleGoogleCallback(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	token, err := googleOauthConfig.Exchange(r.Context(), r.FormValue("code"))
+	token, err := GoogleOauthConfig.Exchange(r.Context(), r.FormValue("code"))
 	if err != nil {
 		log.Printf("Error while exchanging code for token: %s", err.Error())
 		http.Redirect(w, r, "/", http.StatusTemporaryRedirect)

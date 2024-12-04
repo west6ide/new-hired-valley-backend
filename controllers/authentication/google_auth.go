@@ -2,6 +2,7 @@ package authentication
 
 import (
 	"encoding/json"
+	"errors"
 	"github.com/gorilla/sessions"
 	"golang.org/x/oauth2"
 	"golang.org/x/oauth2/google"
@@ -195,4 +196,28 @@ func HandleGoogleCallback(w http.ResponseWriter, r *http.Request) {
 
 	// Перенаправляем пользователя на защищенную страницу
 	http.Redirect(w, r, "/welcome", http.StatusTemporaryRedirect)
+}
+
+// ValidateGoogleToken - проверяет токен авторизации из заголовка запроса
+func ValidateGoogleToken(r *http.Request) (*oauth2.Token, error) {
+	authHeader := r.Header.Get("Authorization")
+	if authHeader == "" {
+		return nil, errors.New("missing Authorization header")
+	}
+
+	// Токен должен начинаться с "Bearer "
+	if len(authHeader) <= 7 || authHeader[:7] != "Bearer " {
+		return nil, errors.New("invalid Authorization header format")
+	}
+
+	// Извлечение токена
+	accessToken := authHeader[7:]
+	if accessToken == "" {
+		return nil, errors.New("missing token")
+	}
+
+	// Создаем и возвращаем токен OAuth2
+	return &oauth2.Token{
+		AccessToken: accessToken,
+	}, nil
 }

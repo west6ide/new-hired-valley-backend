@@ -14,7 +14,6 @@ import (
 	"mime/multipart"
 	"net/http"
 	"strconv"
-	"time"
 )
 
 var (
@@ -186,13 +185,16 @@ func DeleteLesson(w http.ResponseWriter, r *http.Request) {
 }
 
 // UploadVideoToLesson - загрузка видео на YouTube и сохранение ссылки в Lesson
+// UploadVideoToLesson - загрузка видео на YouTube и сохранение ссылки в Lesson
 func UploadVideoToLesson(w http.ResponseWriter, r *http.Request) {
-	claims, err := authentication.ValidateToken(r)
-	if err != nil || claims.Role != "mentor" {
-		http.Error(w, "Unauthorized or forbidden", http.StatusUnauthorized)
+	// Проверяем Google OAuth токен
+	token, err := authentication.ValidateGoogleToken(r)
+	if err != nil {
+		http.Error(w, "Unauthorized or forbidden: "+err.Error(), http.StatusUnauthorized)
 		return
 	}
 
+	// Получаем ID урока из параметров
 	lessonIDStr := r.URL.Query().Get("lesson_id")
 	if lessonIDStr == "" {
 		http.Error(w, "Lesson ID is required", http.StatusBadRequest)
@@ -205,25 +207,21 @@ func UploadVideoToLesson(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Проверяем существование урока
 	var lesson courses.Lesson
 	if err := config.DB.First(&lesson, uint(lessonID)).Error; err != nil {
 		http.Error(w, "Lesson not found", http.StatusNotFound)
 		return
 	}
 
-	if lesson.InstructorID != claims.UserID {
-		http.Error(w, "Permission denied", http.StatusForbidden)
+	// Проверяем, является ли текущий пользователь владельцем урока
+	var googleUser users.GoogleUser
+	if err := config.DB.Where("user_id = ?", lesson.InstructorID).First(&googleUser).Error; err != nil {
+		http.Error(w, "Instructor not found or unauthorized", http.StatusForbidden)
 		return
 	}
 
-	// Получаем YouTube токены из базы данных
-	var youtubeUser users.YoutubeUser
-	if err := config.DB.Where("user_id = ?", claims.UserID).First(&youtubeUser).Error; err != nil {
-		http.Error(w, "Google user not found", http.StatusUnauthorized)
-		return
-	}
-
-	// Читаем видео из формы
+	// Читаем файл видео из запроса
 	file, header, err := r.FormFile("video")
 	if err != nil {
 		http.Error(w, "Failed to read video file", http.StatusBadRequest)
@@ -232,19 +230,20 @@ func UploadVideoToLesson(w http.ResponseWriter, r *http.Request) {
 	defer file.Close()
 
 	// Загрузка видео на YouTube
-	videoID, err := uploadVideoToYouTube(file, header.Filename, youtubeUser.AccessToken, youtubeUser.RefreshToken, youtubeUser.Expiry)
+	videoID, err := uploadVideoToYouTube(file, header.Filename, token.AccessToken)
 	if err != nil {
 		http.Error(w, "Failed to upload video to YouTube: "+err.Error(), http.StatusInternalServerError)
 		return
 	}
 
-	// Обновляем информацию об уроке
+	// Обновляем запись об уроке
 	lesson.VideoLink = fmt.Sprintf("https://www.youtube.com/watch?v=%s", videoID)
 	if err := config.DB.Save(&lesson).Error; err != nil {
 		http.Error(w, "Failed to save lesson", http.StatusInternalServerError)
 		return
 	}
 
+	// Успешный ответ
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]string{
 		"message":   "Video uploaded successfully",
@@ -254,20 +253,19 @@ func UploadVideoToLesson(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-func uploadVideoToYouTube(file multipart.File, fileName string, accessToken string, refreshToken string, expiry time.Time) (string, error) {
+// uploadVideoToYouTube - загрузка видео на YouTube с использованием Google OAuth токена
+func uploadVideoToYouTube(file multipart.File, fileName string, accessToken string) (string, error) {
 	ctx := context.Background()
 
-	// Создаем токен вручную
+	// Создаем токен OAuth вручную
 	token := &oauth2.Token{
-		AccessToken:  accessToken,
-		RefreshToken: refreshToken,
-		Expiry:       expiry,
+		AccessToken: accessToken,
 	}
 
-	// Создаем TokenSource для автоматического обновления токенов
+	// Создаем источник токена
 	tokenSource := authentication.GoogleOauthConfig.TokenSource(ctx, token)
 
-	// Создаем сервис YouTube
+	// Создаем YouTube сервис
 	service, err := youtube.NewService(ctx, option.WithTokenSource(tokenSource))
 	if err != nil {
 		return "", fmt.Errorf("failed to create YouTube service: %v", err)
@@ -284,12 +282,13 @@ func uploadVideoToYouTube(file multipart.File, fileName string, accessToken stri
 		},
 	}
 
-	// Загрузка видео
+	// Загружаем видео
 	call := service.Videos.Insert([]string{"snippet", "status"}, video)
 	response, err := call.Media(file).Do()
 	if err != nil {
 		return "", fmt.Errorf("failed to upload video: %v", err)
 	}
 
+	// Возвращаем ID видео
 	return response.Id, nil
 }

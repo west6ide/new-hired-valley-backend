@@ -10,6 +10,7 @@ import (
 	"hired-valley-backend/config"
 	"hired-valley-backend/controllers/authentication"
 	"hired-valley-backend/models/courses"
+	"hired-valley-backend/models/courses/videos"
 	"hired-valley-backend/models/users"
 	"mime/multipart"
 	"net/http"
@@ -185,7 +186,6 @@ func DeleteLesson(w http.ResponseWriter, r *http.Request) {
 }
 
 // UploadVideoToLesson - загрузка видео на YouTube и сохранение ссылки в Lesson
-// UploadVideoToLesson - загрузка видео на YouTube и сохранение ссылки в Lesson
 func UploadVideoToLesson(w http.ResponseWriter, r *http.Request) {
 	// Проверяем Google OAuth токен
 	token, err := authentication.ValidateGoogleToken(r)
@@ -236,8 +236,23 @@ func UploadVideoToLesson(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Создаем запись о видео в таблице videos
+	video := videos.Video{
+		Title:       header.Filename,
+		Description: "Uploaded via Hired Valley platform",
+		VideoLink:   fmt.Sprintf("https://www.youtube.com/watch?v=%s", videoID),
+		YouTubeID:   videoID,
+		UploadedBy:  lesson.InstructorID,
+		LessonID:    uint(lessonID),
+	}
+
+	if err := config.DB.Create(&video).Error; err != nil {
+		http.Error(w, "Failed to save video data", http.StatusInternalServerError)
+		return
+	}
+
 	// Обновляем запись об уроке
-	lesson.VideoLink = fmt.Sprintf("https://www.youtube.com/watch?v=%s", videoID)
+	lesson.VideoLink = video.VideoLink
 	if err := config.DB.Save(&lesson).Error; err != nil {
 		http.Error(w, "Failed to save lesson", http.StatusInternalServerError)
 		return
@@ -245,11 +260,12 @@ func UploadVideoToLesson(w http.ResponseWriter, r *http.Request) {
 
 	// Успешный ответ
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]string{
-		"message":   "Video uploaded successfully",
-		"video_url": lesson.VideoLink,
-		"lesson_id": lessonIDStr,
-		"video_id":  videoID,
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"message":    "Video uploaded successfully",
+		"video_url":  video.VideoLink,
+		"lesson_id":  lessonIDStr,
+		"video_id":   videoID,
+		"video_data": video, // Включаем информацию о видео в ответ
 	})
 }
 

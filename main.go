@@ -10,6 +10,7 @@ import (
 	"hired-valley-backend/controllers/stories"
 	"hired-valley-backend/models/career"
 	"hired-valley-backend/models/courses"
+	"hired-valley-backend/models/courses/videos"
 	"hired-valley-backend/models/recommend"
 	"hired-valley-backend/models/story"
 	"hired-valley-backend/models/users"
@@ -38,6 +39,7 @@ func main() {
 		&users.LinkedInUser{},
 		&courses.Course{},
 		&courses.Lesson{},
+		&videos.Video{},
 		&story.Story{},
 		&story.Reaction{},
 		&story.ViewStory{},

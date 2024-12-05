@@ -333,6 +333,7 @@ func GetVideo(w http.ResponseWriter, r *http.Request) {
 }
 
 func UpdateVideo(w http.ResponseWriter, r *http.Request) {
+	// Получаем ID видео из запроса
 	videoID := r.URL.Query().Get("video_id")
 	if videoID == "" {
 		http.Error(w, "Video ID is required", http.StatusBadRequest)
@@ -356,6 +357,16 @@ func UpdateVideo(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Получение информации о видео из базы данных
+	var videoRecord videos.Video
+	if err := config.DB.Where("id = ?", videoID).First(&videoRecord).Error; err != nil {
+		http.Error(w, "Video not found in database", http.StatusNotFound)
+		return
+	}
+
+	// Используем YouTubeID для запроса к YouTube API
+	youTubeID := videoRecord.YouTubeID
+
 	// Настройка контекста и YouTube-сервиса
 	ctx := context.Background()
 	tokenSource := authentication.GoogleOauthConfig.TokenSource(ctx, &oauth2.Token{AccessToken: token.AccessToken})
@@ -365,19 +376,24 @@ func UpdateVideo(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Получение текущих данных видео с YouTube перед обновлением
-	videoCall := service.Videos.List([]string{"snippet"}).Id(videoID)
+	// Получение текущих данных видео с YouTube
+	videoCall := service.Videos.List([]string{"snippet"}).Id(youTubeID)
 	response, err := videoCall.Do()
-	if err != nil || len(response.Items) == 0 {
+	if err != nil {
 		http.Error(w, "Failed to fetch video from YouTube", http.StatusInternalServerError)
 		return
 	}
+	if len(response.Items) == 0 {
+		http.Error(w, "Video not found on YouTube", http.StatusNotFound)
+		return
+	}
 
+	// Обновляем данные видео
 	video := response.Items[0]
 	video.Snippet.Title = videoUpdate.Title
 	video.Snippet.Description = videoUpdate.Description
 
-	// Выполнение обновления видео на YouTube
+	// Выполняем обновление видео на YouTube
 	updateCall := service.Videos.Update([]string{"snippet"}, video)
 	updatedVideo, err := updateCall.Do()
 	if err != nil {
@@ -385,8 +401,8 @@ func UpdateVideo(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Обновление в базе данных
-	if err := config.DB.Model(&videos.Video{}).Where("youtube_id = ?", videoID).Updates(videos.Video{
+	// Обновляем запись в базе данных
+	if err := config.DB.Model(&videoRecord).Updates(videos.Video{
 		Title:       videoUpdate.Title,
 		Description: videoUpdate.Description,
 	}).Error; err != nil {
@@ -394,7 +410,7 @@ func UpdateVideo(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Успешный ответ
+	// Отправляем успешный ответ
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]interface{}{
 		"message":     "Video updated successfully",

@@ -308,3 +308,152 @@ func uploadVideoToYouTube(file multipart.File, fileName string, accessToken stri
 	// Возвращаем ID видео
 	return response.Id, nil
 }
+
+func GetVideo(w http.ResponseWriter, r *http.Request) {
+	videoID := r.URL.Query().Get("video_id")
+	if videoID == "" {
+		http.Error(w, "Video ID is required", http.StatusBadRequest)
+		return
+	}
+
+	// Получение данных о видео из базы данных
+	var video videos.Video
+	if err := config.DB.Where("youtube_id = ?", videoID).First(&video).Error; err != nil {
+		http.Error(w, "Video not found", http.StatusNotFound)
+		return
+	}
+
+	// Получение данных о видео из YouTube
+	ctx := context.Background()
+	service, err := youtube.NewService(ctx, option.WithAPIKey("YOUR_YOUTUBE_API_KEY"))
+	if err != nil {
+		http.Error(w, "Failed to create YouTube service", http.StatusInternalServerError)
+		return
+	}
+
+	call := service.Videos.List([]string{"snippet", "status"}).Id(videoID)
+	response, err := call.Do()
+	if err != nil || len(response.Items) == 0 {
+		http.Error(w, "Failed to fetch video from YouTube", http.StatusInternalServerError)
+		return
+	}
+
+	// Успешный ответ
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"video_data":   video,
+		"youtube_data": response.Items[0], // YouTube метаданные
+	})
+}
+
+func UpdateVideo(w http.ResponseWriter, r *http.Request) {
+	videoID := r.URL.Query().Get("video_id")
+	if videoID == "" {
+		http.Error(w, "Video ID is required", http.StatusBadRequest)
+		return
+	}
+
+	// Проверка Google OAuth токена
+	token, err := authentication.ValidateGoogleToken(r)
+	if err != nil {
+		http.Error(w, "Unauthorized or forbidden: "+err.Error(), http.StatusUnauthorized)
+		return
+	}
+
+	// Чтение входных данных для обновления
+	var videoUpdate struct {
+		Title       string `json:"title"`
+		Description string `json:"description"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&videoUpdate); err != nil {
+		http.Error(w, "Invalid input", http.StatusBadRequest)
+		return
+	}
+
+	// Настройка контекста и YouTube-сервиса
+	ctx := context.Background()
+	tokenSource := authentication.GoogleOauthConfig.TokenSource(ctx, &oauth2.Token{AccessToken: token.AccessToken})
+	service, err := youtube.NewService(ctx, option.WithTokenSource(tokenSource))
+	if err != nil {
+		http.Error(w, "Failed to create YouTube service", http.StatusInternalServerError)
+		return
+	}
+
+	// Получение текущих данных видео с YouTube перед обновлением
+	videoCall := service.Videos.List([]string{"snippet"}).Id(videoID)
+	response, err := videoCall.Do()
+	if err != nil || len(response.Items) == 0 {
+		http.Error(w, "Failed to fetch video from YouTube", http.StatusInternalServerError)
+		return
+	}
+
+	video := response.Items[0]
+	video.Snippet.Title = videoUpdate.Title
+	video.Snippet.Description = videoUpdate.Description
+
+	// Выполнение обновления видео на YouTube
+	updateCall := service.Videos.Update([]string{"snippet"}, video)
+	updatedVideo, err := updateCall.Do()
+	if err != nil {
+		http.Error(w, "Failed to update video on YouTube", http.StatusInternalServerError)
+		return
+	}
+
+	// Обновление в базе данных
+	if err := config.DB.Model(&videos.Video{}).Where("youtube_id = ?", videoID).Updates(videos.Video{
+		Title:       videoUpdate.Title,
+		Description: videoUpdate.Description,
+	}).Error; err != nil {
+		http.Error(w, "Failed to update video in database", http.StatusInternalServerError)
+		return
+	}
+
+	// Успешный ответ
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"message":     "Video updated successfully",
+		"updatedData": updatedVideo,
+	})
+}
+
+func DeleteVideo(w http.ResponseWriter, r *http.Request) {
+	videoID := r.URL.Query().Get("video_id")
+	if videoID == "" {
+		http.Error(w, "Video ID is required", http.StatusBadRequest)
+		return
+	}
+
+	// Проверяем авторизацию Google
+	token, err := authentication.ValidateGoogleToken(r)
+	if err != nil {
+		http.Error(w, "Unauthorized or forbidden: "+err.Error(), http.StatusUnauthorized)
+		return
+	}
+
+	// Удаляем видео с YouTube
+	ctx := context.Background()
+	tokenSource := authentication.GoogleOauthConfig.TokenSource(ctx, &oauth2.Token{AccessToken: token.AccessToken})
+	service, err := youtube.NewService(ctx, option.WithTokenSource(tokenSource))
+	if err != nil {
+		http.Error(w, "Failed to create YouTube service", http.StatusInternalServerError)
+		return
+	}
+
+	call := service.Videos.Delete(videoID)
+	if err := call.Do(); err != nil {
+		http.Error(w, "Failed to delete video from YouTube", http.StatusInternalServerError)
+		return
+	}
+
+	// Удаляем данные из базы данных
+	if err := config.DB.Where("youtube_id = ?", videoID).Delete(&videos.Video{}).Error; err != nil {
+		http.Error(w, "Failed to delete video from database", http.StatusInternalServerError)
+		return
+	}
+
+	// Успешный ответ
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]string{
+		"message": "Video deleted successfully",
+	})
+}

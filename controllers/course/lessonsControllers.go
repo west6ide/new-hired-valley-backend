@@ -416,8 +416,8 @@ func UpdateVideo(w http.ResponseWriter, r *http.Request) {
 }
 
 func DeleteVideo(w http.ResponseWriter, r *http.Request) {
-	videoID := r.URL.Query().Get("you_tube_id")
-	if videoID == "" {
+	you_tube_id := r.URL.Query().Get("you_tube_id")
+	if you_tube_id == "" {
 		http.Error(w, "Video ID is required", http.StatusBadRequest)
 		return
 	}
@@ -438,14 +438,14 @@ func DeleteVideo(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	call := service.Videos.Delete(videoID)
+	call := service.Videos.Delete(you_tube_id)
 	if err := call.Do(); err != nil {
 		http.Error(w, "Failed to delete video from YouTube", http.StatusInternalServerError)
 		return
 	}
 
 	// Удаляем данные из базы данных
-	if err := config.DB.Where("you_tube_id = ?", videoID).Delete(&videos.Video{}).Error; err != nil {
+	if err := config.DB.Where("you_tube_id = ?", you_tube_id).Delete(&videos.Video{}).Error; err != nil {
 		http.Error(w, "Failed to delete video from database", http.StatusInternalServerError)
 		return
 	}

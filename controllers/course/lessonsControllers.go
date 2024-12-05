@@ -333,10 +333,10 @@ func GetVideo(w http.ResponseWriter, r *http.Request) {
 }
 
 func UpdateVideo(w http.ResponseWriter, r *http.Request) {
-	// Получаем ID видео из запроса
-	videoID := r.URL.Query().Get("video_id")
-	if videoID == "" {
-		http.Error(w, "Video ID is required", http.StatusBadRequest)
+	// Получаем YouTube ID из запроса
+	youtubeID := r.URL.Query().Get("youtube_id")
+	if youtubeID == "" {
+		http.Error(w, "YouTube ID is required", http.StatusBadRequest)
 		return
 	}
 
@@ -357,15 +357,12 @@ func UpdateVideo(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Получение информации о видео из базы данных
+	// Получение информации о видео из базы данных по youtube_id
 	var videoRecord videos.Video
-	if err := config.DB.Where("id = ?", videoID).First(&videoRecord).Error; err != nil {
+	if err := config.DB.Where("youtube_id = ?", youtubeID).First(&videoRecord).Error; err != nil {
 		http.Error(w, "Video not found in database", http.StatusNotFound)
 		return
 	}
-
-	// Используем YouTubeID для запроса к YouTube API
-	youTubeID := videoRecord.YouTubeID
 
 	// Настройка контекста и YouTube-сервиса
 	ctx := context.Background()
@@ -377,7 +374,7 @@ func UpdateVideo(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Получение текущих данных видео с YouTube
-	videoCall := service.Videos.List([]string{"snippet"}).Id(youTubeID)
+	videoCall := service.Videos.List([]string{"snippet"}).Id(youtubeID)
 	response, err := videoCall.Do()
 	if err != nil {
 		http.Error(w, "Failed to fetch video from YouTube", http.StatusInternalServerError)

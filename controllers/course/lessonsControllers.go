@@ -334,7 +334,7 @@ func GetVideo(w http.ResponseWriter, r *http.Request) {
 
 func UpdateVideo(w http.ResponseWriter, r *http.Request) {
 	// Получаем YouTube ID из запроса
-	youtubeID := r.URL.Query().Get("youtube_id")
+	youtubeID := r.URL.Query().Get("you_tube_id")
 	if youtubeID == "" {
 		http.Error(w, "YouTube ID is required", http.StatusBadRequest)
 		return
@@ -359,7 +359,7 @@ func UpdateVideo(w http.ResponseWriter, r *http.Request) {
 
 	// Получение информации о видео из базы данных по youtube_id
 	var videoRecord videos.Video
-	if err := config.DB.Where("youtube_id = ?", youtubeID).First(&videoRecord).Error; err != nil {
+	if err := config.DB.Where("you_tube_id = ?", youtubeID).First(&videoRecord).Error; err != nil {
 		http.Error(w, "Video not found in database", http.StatusNotFound)
 		return
 	}

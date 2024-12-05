@@ -310,40 +310,26 @@ func uploadVideoToYouTube(file multipart.File, fileName string, accessToken stri
 }
 
 func GetVideo(w http.ResponseWriter, r *http.Request) {
-	videoID := r.URL.Query().Get("video_id")
-	if videoID == "" {
+	videoIDStr := r.URL.Query().Get("video_id")
+	if videoIDStr == "" {
 		http.Error(w, "Video ID is required", http.StatusBadRequest)
 		return
 	}
 
-	// Получение данных о видео из базы данных
+	videoID, err := strconv.Atoi(videoIDStr)
+	if err != nil || videoID <= 0 {
+		http.Error(w, "Invalid video ID", http.StatusBadRequest)
+		return
+	}
+
 	var video videos.Video
-	if err := config.DB.Where("youtube_id = ?", videoID).First(&video).Error; err != nil {
+	if err := config.DB.First(&video, videoID).Error; err != nil {
 		http.Error(w, "Video not found", http.StatusNotFound)
 		return
 	}
 
-	// Получение данных о видео из YouTube
-	ctx := context.Background()
-	service, err := youtube.NewService(ctx, option.WithAPIKey("YOUR_YOUTUBE_API_KEY"))
-	if err != nil {
-		http.Error(w, "Failed to create YouTube service", http.StatusInternalServerError)
-		return
-	}
-
-	call := service.Videos.List([]string{"snippet", "status"}).Id(videoID)
-	response, err := call.Do()
-	if err != nil || len(response.Items) == 0 {
-		http.Error(w, "Failed to fetch video from YouTube", http.StatusInternalServerError)
-		return
-	}
-
-	// Успешный ответ
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]interface{}{
-		"video_data":   video,
-		"youtube_data": response.Items[0], // YouTube метаданные
-	})
+	json.NewEncoder(w).Encode(video)
 }
 
 func UpdateVideo(w http.ResponseWriter, r *http.Request) {

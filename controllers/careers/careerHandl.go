@@ -69,9 +69,10 @@ func GenerateCareerPlanHandler(w http.ResponseWriter, r *http.Request) {
 		Where("role = ?", "mentor").
 		Where("visibility = ?", "public").
 		Joins("LEFT JOIN user_skills ON user_skills.user_id = users.id").
+		Joins("LEFT JOIN skills ON skills.id = user_skills.skill_id"). // Присоединение таблицы skills
 		Joins("LEFT JOIN user_interests ON user_interests.user_id = users.id").
-		Where("user_skills.name ILIKE ? OR user_interests.name ILIKE ?",
-			"%"+req.ShortTermGoals+"%", "%"+req.LongTermGoals+"%").
+		Joins("LEFT JOIN interests ON interests.id = user_interests.interest_id"). // Присоединение таблицы interests
+		Where("skills.name ILIKE ? OR interests.name ILIKE ?", "%"+req.ShortTermGoals+"%", "%"+req.LongTermGoals+"%").
 		Group("users.id").
 		Find(&mentors).Error
 
@@ -86,7 +87,7 @@ func GenerateCareerPlanHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Формирование ответа
+	// Возвращаем успешный ответ
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]interface{}{
 		"plan_id": careerPlan.ID,

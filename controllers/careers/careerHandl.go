@@ -2,6 +2,7 @@ package careers
 
 import (
 	"encoding/json"
+	"fmt"
 	"hired-valley-backend/config"
 	"hired-valley-backend/controllers/authentication"
 	"hired-valley-backend/models/career"
@@ -18,20 +19,18 @@ type CareerPlanRequest struct {
 }
 
 func GenerateCareerPlanHandler(w http.ResponseWriter, r *http.Request) {
-	// Проверка метода запроса
 	if r.Method != http.MethodPost {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
 
-	// Проверка токена пользователя
+	// Проверка токена
 	claims, err := authentication.ValidateToken(r)
 	if err != nil {
 		http.Error(w, "Unauthorized: "+err.Error(), http.StatusUnauthorized)
 		return
 	}
 
-	// Декодируем запрос
 	var req CareerPlanRequest
 	err = json.NewDecoder(r.Body).Decode(&req)
 	if err != nil {
@@ -39,21 +38,20 @@ func GenerateCareerPlanHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Проверка наличия API ключа
 	apiKey := os.Getenv("AIML_API_KEY")
 	if apiKey == "" {
 		http.Error(w, "API key is missing", http.StatusInternalServerError)
 		return
 	}
 
-	// Генерация карьерного плана через внешний сервис
+	// Генерация карьерного плана
 	plan, err := services.GenerateCareerPlan(apiKey, req.ShortTermGoals, req.LongTermGoals)
 	if err != nil {
 		http.Error(w, "Failed to generate career plan: "+err.Error(), http.StatusInternalServerError)
 		return
 	}
 
-	// Сохранение карьерного плана в базу данных
+	// Сохранение плана в базе данных
 	careerPlan := career.PlanCareer{
 		UserID:         claims.UserID,
 		ShortTermGoals: req.ShortTermGoals,
@@ -65,8 +63,10 @@ func GenerateCareerPlanHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Поиск менторов, соответствующих целям пользователя
+	// Поиск менторов
 	var mentors []users.User
+	fmt.Println("Searching mentors with goals:", req.ShortTermGoals, req.LongTermGoals)
+
 	err = config.DB.
 		Preload("Skills").
 		Preload("Interests").
@@ -85,13 +85,13 @@ func GenerateCareerPlanHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Проверка на наличие найденных менторов
 	if len(mentors) == 0 {
+		fmt.Println("No mentors found")
 		http.Error(w, "No mentors found matching the criteria", http.StatusNotFound)
 		return
 	}
 
-	// Формируем успешный ответ с карьерным планом и наставниками
+	// Возвращаем успешный ответ
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]interface{}{
 		"plan_id": careerPlan.ID,

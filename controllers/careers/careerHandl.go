@@ -61,15 +61,28 @@ func GenerateCareerPlanHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Поиск менторов по роли и интересам/навыкам
+	// Поиск менторов по навыкам и интересам
 	var mentors []users.User
-	if err := config.DB.Preload("Skills").Preload("Interests").
+	err = config.DB.
+		Preload("Skills").
+		Preload("Interests").
 		Where("role = ?", "mentor").
 		Where("visibility = ?", "public").
-		Where("EXISTS (SELECT 1 FROM user_skills WHERE user_skills.user_id = users.id AND user_skills.name ILIKE ?)", "%"+req.ShortTermGoals+"%").
-		Or("EXISTS (SELECT 1 FROM user_interests WHERE user_interests.user_id = users.id AND user_interests.name ILIKE ?)", "%"+req.LongTermGoals+"%").
-		Find(&mentors).Error; err != nil {
-		http.Error(w, "Failed to retrieve mentors", http.StatusInternalServerError)
+		Joins("LEFT JOIN user_skills ON user_skills.user_id = users.id").
+		Joins("LEFT JOIN user_interests ON user_interests.user_id = users.id").
+		Where("user_skills.name ILIKE ? OR user_interests.name ILIKE ?",
+			"%"+req.ShortTermGoals+"%", "%"+req.LongTermGoals+"%").
+		Group("users.id").
+		Find(&mentors).Error
+
+	if err != nil {
+		http.Error(w, "Failed to retrieve mentors: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	// Проверка на наличие найденных менторов
+	if len(mentors) == 0 {
+		http.Error(w, "No mentors found matching the criteria", http.StatusNotFound)
 		return
 	}
 

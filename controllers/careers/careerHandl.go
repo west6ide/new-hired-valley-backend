@@ -5,6 +5,7 @@ import (
 	"hired-valley-backend/config"
 	"hired-valley-backend/controllers/authentication"
 	"hired-valley-backend/models/career"
+	"hired-valley-backend/models/users"
 	"hired-valley-backend/services"
 	"net/http"
 	"os"
@@ -60,10 +61,23 @@ func GenerateCareerPlanHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Возвращаем успешный ответ
+	// Поиск менторов по роли и интересам/навыкам
+	var mentors []users.User
+	if err := config.DB.Preload("Skills").Preload("Interests").
+		Where("role = ?", "mentor").
+		Where("visibility = ?", "public").
+		Where("EXISTS (SELECT 1 FROM user_skills WHERE user_skills.user_id = users.id AND user_skills.name ILIKE ?)", "%"+req.ShortTermGoals+"%").
+		Or("EXISTS (SELECT 1 FROM user_interests WHERE user_interests.user_id = users.id AND user_interests.name ILIKE ?)", "%"+req.LongTermGoals+"%").
+		Find(&mentors).Error; err != nil {
+		http.Error(w, "Failed to retrieve mentors", http.StatusInternalServerError)
+		return
+	}
+
+	// Формирование ответа
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]interface{}{
 		"plan_id": careerPlan.ID,
 		"steps":   plan,
+		"mentors": mentors,
 	})
 }

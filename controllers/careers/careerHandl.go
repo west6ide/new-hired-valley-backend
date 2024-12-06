@@ -17,18 +17,20 @@ type CareerPlanRequest struct {
 }
 
 func GenerateCareerPlanHandler(w http.ResponseWriter, r *http.Request) {
+	// Проверка метода запроса
 	if r.Method != http.MethodPost {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
 
-	// Проверка токена
+	// Проверка токена пользователя
 	claims, err := authentication.ValidateToken(r)
 	if err != nil {
 		http.Error(w, "Unauthorized: "+err.Error(), http.StatusUnauthorized)
 		return
 	}
 
+	// Декодируем запрос
 	var req CareerPlanRequest
 	err = json.NewDecoder(r.Body).Decode(&req)
 	if err != nil {
@@ -36,20 +38,21 @@ func GenerateCareerPlanHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Проверка наличия API ключа
 	apiKey := os.Getenv("AIML_API_KEY")
 	if apiKey == "" {
 		http.Error(w, "API key is missing", http.StatusInternalServerError)
 		return
 	}
 
-	// Генерация карьерного плана
+	// Генерация карьерного плана через внешний сервис
 	plan, err := services.GenerateCareerPlan(apiKey, req.ShortTermGoals, req.LongTermGoals)
 	if err != nil {
 		http.Error(w, "Failed to generate career plan: "+err.Error(), http.StatusInternalServerError)
 		return
 	}
 
-	// Сохранение плана в базе данных
+	// Сохранение карьерного плана в базу данных
 	careerPlan := career.PlanCareer{
 		UserID:         claims.UserID,
 		ShortTermGoals: req.ShortTermGoals,
@@ -61,7 +64,7 @@ func GenerateCareerPlanHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Поиск менторов по навыкам и интересам
+	// Поиск менторов, соответствующих целям пользователя
 	var mentors []users.User
 	err = config.DB.
 		Preload("Skills").
@@ -69,9 +72,9 @@ func GenerateCareerPlanHandler(w http.ResponseWriter, r *http.Request) {
 		Where("role = ?", "mentor").
 		Where("visibility = ?", "public").
 		Joins("LEFT JOIN user_skills ON user_skills.user_id = users.id").
-		Joins("LEFT JOIN skills ON skills.id = user_skills.skill_id"). // Присоединение таблицы skills
+		Joins("LEFT JOIN skills ON skills.id = user_skills.skill_id").
 		Joins("LEFT JOIN user_interests ON user_interests.user_id = users.id").
-		Joins("LEFT JOIN interests ON interests.id = user_interests.interest_id"). // Присоединение таблицы interests
+		Joins("LEFT JOIN interests ON interests.id = user_interests.interest_id").
 		Where("skills.name ILIKE ? OR interests.name ILIKE ?", "%"+req.ShortTermGoals+"%", "%"+req.LongTermGoals+"%").
 		Group("users.id").
 		Find(&mentors).Error
@@ -87,7 +90,7 @@ func GenerateCareerPlanHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Возвращаем успешный ответ
+	// Формируем успешный ответ с карьерным планом и наставниками
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]interface{}{
 		"plan_id": careerPlan.ID,

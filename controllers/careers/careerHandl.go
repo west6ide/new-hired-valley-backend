@@ -9,6 +9,7 @@ import (
 	"hired-valley-backend/services"
 	"net/http"
 	"os"
+	"strings"
 )
 
 type CareerPlanRequest struct {
@@ -75,7 +76,7 @@ func GenerateCareerPlanHandler(w http.ResponseWriter, r *http.Request) {
 		Joins("LEFT JOIN skills ON skills.id = user_skills.skill_id").
 		Joins("LEFT JOIN user_interests ON user_interests.user_id = users.id").
 		Joins("LEFT JOIN interests ON interests.id = user_interests.interest_id").
-		Where("skills.name ILIKE ? OR interests.name ILIKE ?", "%"+req.ShortTermGoals+"%", "%"+req.LongTermGoals+"%").
+		Where("skills.name ILIKE ? OR interests.name ILIKE ?", "%"+strings.ToLower(req.ShortTermGoals)+"%", "%"+strings.ToLower(req.LongTermGoals)+"%").
 		Group("users.id").
 		Find(&mentors).Error
 

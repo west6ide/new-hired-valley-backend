@@ -2,15 +2,12 @@ package careers
 
 import (
 	"encoding/json"
-	"fmt"
 	"hired-valley-backend/config"
 	"hired-valley-backend/controllers/authentication"
 	"hired-valley-backend/models/career"
-	"hired-valley-backend/models/users"
 	"hired-valley-backend/services"
 	"net/http"
 	"os"
-	"strings"
 )
 
 type CareerPlanRequest struct {
@@ -63,39 +60,10 @@ func GenerateCareerPlanHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Поиск менторов
-	var mentors []users.User
-	fmt.Println("Searching mentors with goals:", req.ShortTermGoals, req.LongTermGoals)
-
-	err = config.DB.
-		Preload("Skills").
-		Preload("Interests").
-		Where("role = ?", "mentor").
-		Where("visibility = ?", "public").
-		Joins("LEFT JOIN user_skills ON user_skills.user_id = users.id").
-		Joins("LEFT JOIN skills ON skills.id = user_skills.skill_id").
-		Joins("LEFT JOIN user_interests ON user_interests.user_id = users.id").
-		Joins("LEFT JOIN interests ON interests.id = user_interests.interest_id").
-		Where("skills.name ILIKE ? OR interests.name ILIKE ?", "%"+strings.ToLower(req.ShortTermGoals)+"%", "%"+strings.ToLower(req.LongTermGoals)+"%").
-		Group("users.id").
-		Find(&mentors).Error
-
-	if err != nil {
-		http.Error(w, "Failed to retrieve mentors: "+err.Error(), http.StatusInternalServerError)
-		return
-	}
-
-	if len(mentors) == 0 {
-		fmt.Println("No mentors found")
-		http.Error(w, "No mentors found matching the criteria", http.StatusNotFound)
-		return
-	}
-
 	// Возвращаем успешный ответ
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]interface{}{
 		"plan_id": careerPlan.ID,
 		"steps":   plan,
-		"mentors": mentors,
 	})
 }

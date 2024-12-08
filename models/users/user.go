@@ -21,7 +21,7 @@ type User struct {
 	Interests          []Interest    `json:"interests" gorm:"many2many:user_interests"`
 	ContentPreferences string        `gorm:"type:text"`
 	Visibility         string        `json:"visibility" gorm:"default:'public'"` // Контроль видимости профиля
-	AccessToken        string        `json:"token"`
+	AccessToken        string        `json:"accessToken"`
 	RefreshToken       string        `json:"refreshToken"`
 	Provider           string        `json:"provider"`
 	Stories            []story.Story `gorm:"foreignKey:UserID"` // Связь с историями

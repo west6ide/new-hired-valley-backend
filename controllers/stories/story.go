@@ -8,13 +8,14 @@ import (
 	"hired-valley-backend/controllers/authentication"
 	"hired-valley-backend/models/story"
 	"io"
+	"io/ioutil"
 	"net/http"
+	"net/url"
 	"os"
 	"strconv"
 	"time"
 )
 
-// Создание истории с загрузкой файлов
 func CreateStory(w http.ResponseWriter, r *http.Request) {
 	claims, err := authentication.ValidateToken(r)
 	if err != nil {
@@ -63,6 +64,43 @@ func CreateStory(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Получение access token из Google OAuth
+	code := r.URL.Query().Get("code")
+	if code == "" {
+		http.Error(w, "Code not found", http.StatusBadRequest)
+		return
+	}
+
+	clientID := "YOUR_GOOGLE_CLIENT_ID"
+	clientSecret := "YOUR_GOOGLE_CLIENT_SECRET"
+	redirectURI := "GOOGLE_REDIRECT_URL"
+
+	tokenURL := "https://oauth2.googleapis.com/token"
+	resp, err := http.PostForm(tokenURL, url.Values{
+		"code":          {code},
+		"client_id":     {clientID},
+		"client_secret": {clientSecret},
+		"redirect_uri":  {redirectURI},
+		"grant_type":    {"authorization_code"},
+	})
+	if err != nil {
+		http.Error(w, "Failed to exchange code for token", http.StatusInternalServerError)
+		return
+	}
+	defer resp.Body.Close()
+
+	body, err := ioutil.ReadAll(resp.Body)
+	if err != nil {
+		http.Error(w, "Failed to read response body", http.StatusInternalServerError)
+		return
+	}
+
+	var result map[string]interface{}
+	if err := json.Unmarshal(body, &result); err != nil {
+		http.Error(w, "Failed to parse response body", http.StatusInternalServerError)
+		return
+	}
+
 	// Создаем запись истории
 	var newStory story.Story
 	newStory.ContentURL = filePath // Указываем путь к файлу
@@ -70,7 +108,8 @@ func CreateStory(w http.ResponseWriter, r *http.Request) {
 	newStory.CreatedAt = time.Now().UTC()
 	newStory.ExpireAt = newStory.CreatedAt.Add(24 * time.Hour)
 
-	if result := config.DB.Create(&newStory); result.Error != nil {
+	// Используем access token для аутентификации
+	if err := config.DB.Create(&newStory).Error; err != nil {
 		http.Error(w, "Failed to create story", http.StatusInternalServerError)
 		return
 	}

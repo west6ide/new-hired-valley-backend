@@ -1,21 +1,46 @@
 package stories
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
+	"golang.org/x/oauth2"
+	"google.golang.org/api/drive/v3"
 	"gorm.io/gorm"
 	"hired-valley-backend/config"
 	"hired-valley-backend/controllers/authentication"
 	"hired-valley-backend/models/story"
+	"hired-valley-backend/models/users"
 	"io"
-	"io/ioutil"
 	"net/http"
-	"net/url"
-	"os"
 	"strconv"
 	"time"
 )
 
+// GoogleDriveUpload - загружает файл на Google Drive и возвращает идентификатор файла
+func GoogleDriveUpload(file io.Reader, filename string, token *oauth2.Token) (string, string, error) {
+	ctx := context.Background()
+	client := authentication.GoogleOauthConfig.Client(ctx, token)
+
+	srv, err := drive.New(client)
+	if err != nil {
+		return "", "", errors.New("unable to create Google Drive client: " + err.Error())
+	}
+
+	driveFile := &drive.File{
+		Name:    filename,
+		Parents: []string{"root"}, // Вы можете заменить "root" на ID папки
+	}
+
+	uploadedFile, err := srv.Files.Create(driveFile).Media(file).Do()
+	if err != nil {
+		return "", "", errors.New("unable to upload file to Google Drive: " + err.Error())
+	}
+
+	return uploadedFile.Id, uploadedFile.WebViewLink, nil
+}
+
+// CreateStory - создает историю и загружает файл в Google Drive
 func CreateStory(w http.ResponseWriter, r *http.Request) {
 	claims, err := authentication.ValidateToken(r)
 	if err != nil {
@@ -28,17 +53,14 @@ func CreateStory(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Установить лимит размера запроса (например, 10 MB)
 	const maxUploadSize = 10 * 1024 * 1024 // 10 MB
 	r.Body = http.MaxBytesReader(w, r.Body, maxUploadSize)
 
-	// Parse multipart form
 	if err := r.ParseMultipartForm(maxUploadSize); err != nil {
 		http.Error(w, "File too large", http.StatusRequestEntityTooLarge)
 		return
 	}
 
-	// Получаем файл из формы
 	file, header, err := r.FormFile("file")
 	if err != nil {
 		http.Error(w, "File is required", http.StatusBadRequest)
@@ -46,70 +68,40 @@ func CreateStory(w http.ResponseWriter, r *http.Request) {
 	}
 	defer file.Close()
 
-	// Определяем путь для сохранения файла
-	uploadDir := "./uploads/" // Убедитесь, что директория существует
-	filename := strconv.FormatInt(time.Now().Unix(), 10) + "_" + header.Filename
-	filePath := uploadDir + filename
+	// Получение токена пользователя Google из модуля User
+	var userRecord users.User
+	if err := config.DB.First(&userRecord, claims.UserID).Error; err != nil {
+		http.Error(w, "Failed to retrieve user record", http.StatusInternalServerError)
+		return
+	}
 
-	// Сохраняем файл
-	out, err := os.Create(filePath)
+	if userRecord.AccessToken == "" {
+		http.Error(w, "User has not linked Google account", http.StatusBadRequest)
+		return
+	}
+
+	userToken := &oauth2.Token{
+		AccessToken: userRecord.AccessToken,
+		TokenType:   "Bearer", // По умолчанию
+	}
+
+	// Загрузка файла в Google Drive
+	fileID, webViewLink, err := GoogleDriveUpload(file, header.Filename, userToken)
 	if err != nil {
-		http.Error(w, "Unable to save the file", http.StatusInternalServerError)
-		return
-	}
-	defer out.Close()
-	_, err = io.Copy(out, file)
-	if err != nil {
-		http.Error(w, "Failed to save the file", http.StatusInternalServerError)
+		http.Error(w, "Failed to upload file to Google Drive: "+err.Error(), http.StatusInternalServerError)
 		return
 	}
 
-	// Получение access token из Google OAuth
-	code := r.URL.Query().Get("code")
-	if code == "" {
-		http.Error(w, "Code not found", http.StatusBadRequest)
-		return
+	// Сохранение истории в базу данных
+	newStory := story.Story{
+		ContentURL:  webViewLink, // Ссылка на файл
+		DriveFileID: fileID,      // ID файла в Google Drive
+		UserID:      claims.UserID,
+		CreatedAt:   time.Now().UTC(),
+		ExpireAt:    time.Now().UTC().Add(24 * time.Hour),
 	}
 
-	clientID := "YOUR_GOOGLE_CLIENT_ID"
-	clientSecret := "YOUR_GOOGLE_CLIENT_SECRET"
-	redirectURI := "GOOGLE_REDIRECT_URL"
-
-	tokenURL := "https://oauth2.googleapis.com/token"
-	resp, err := http.PostForm(tokenURL, url.Values{
-		"code":          {code},
-		"client_id":     {clientID},
-		"client_secret": {clientSecret},
-		"redirect_uri":  {redirectURI},
-		"grant_type":    {"authorization_code"},
-	})
-	if err != nil {
-		http.Error(w, "Failed to exchange code for token", http.StatusInternalServerError)
-		return
-	}
-	defer resp.Body.Close()
-
-	body, err := ioutil.ReadAll(resp.Body)
-	if err != nil {
-		http.Error(w, "Failed to read response body", http.StatusInternalServerError)
-		return
-	}
-
-	var result map[string]interface{}
-	if err := json.Unmarshal(body, &result); err != nil {
-		http.Error(w, "Failed to parse response body", http.StatusInternalServerError)
-		return
-	}
-
-	// Создаем запись истории
-	var newStory story.Story
-	newStory.ContentURL = filePath // Указываем путь к файлу
-	newStory.UserID = claims.UserID
-	newStory.CreatedAt = time.Now().UTC()
-	newStory.ExpireAt = newStory.CreatedAt.Add(24 * time.Hour)
-
-	// Используем access token для аутентификации
-	if err := config.DB.Create(&newStory).Error; err != nil {
+	if result := config.DB.Create(&newStory); result.Error != nil {
 		http.Error(w, "Failed to create story", http.StatusInternalServerError)
 		return
 	}

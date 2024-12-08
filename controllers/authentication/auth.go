@@ -55,7 +55,7 @@ func Register(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Сохраняем токен в базе данных
-	if err := config.DB.Model(&user).Update("token", tokenString).Error; err != nil {
+	if err := config.DB.Model(&user).Update("accessToken", tokenString).Error; err != nil {
 		http.Error(w, "Error saving token", http.StatusInternalServerError)
 		return
 	}
@@ -95,7 +95,7 @@ func Login(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Сохраняем токен в базе данных
-	if err := config.DB.Model(&user).Update("token", tokenString).Error; err != nil {
+	if err := config.DB.Model(&user).Update("accessToken", tokenString).Error; err != nil {
 		http.Error(w, "Error saving token", http.StatusInternalServerError)
 		return
 	}

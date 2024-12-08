@@ -8,7 +8,7 @@ type Story struct {
 	ID          uint       `gorm:"primaryKey"`
 	UserID      uint       `gorm:"index;constraint:OnDelete:CASCADE;not null"`
 	ContentURL  string     `gorm:"type:text;not null"` // Ссылка на медиафайл (фото или видео)
-	DriveFileID string     `gorm:"not null"`
+	DriveFileID string     `gorm:"index;not null"`
 	CreatedAt   time.Time  `gorm:"autoCreateTime"` // Время создания истории
 	ExpireAt    time.Time  // Время истечения истории
 	IsArchived  bool       `gorm:"default:false"`      // Флаг, сохранена ли история в архиве

@@ -7,12 +7,14 @@ import (
 	"hired-valley-backend/config"
 	"hired-valley-backend/controllers/authentication"
 	"hired-valley-backend/models/story"
+	"io"
 	"net/http"
+	"os"
 	"strconv"
 	"time"
 )
 
-// Создание истории
+// Создание истории с загрузкой файлов
 func CreateStory(w http.ResponseWriter, r *http.Request) {
 	claims, err := authentication.ValidateToken(r)
 	if err != nil {
@@ -25,17 +27,45 @@ func CreateStory(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Установить лимит размера запроса (например, 10 MB)
+	const maxUploadSize = 10 * 1024 * 1024 // 10 MB
+	r.Body = http.MaxBytesReader(w, r.Body, maxUploadSize)
+
+	// Parse multipart form
+	if err := r.ParseMultipartForm(maxUploadSize); err != nil {
+		http.Error(w, "File too large", http.StatusRequestEntityTooLarge)
+		return
+	}
+
+	// Получаем файл из формы
+	file, header, err := r.FormFile("file")
+	if err != nil {
+		http.Error(w, "File is required", http.StatusBadRequest)
+		return
+	}
+	defer file.Close()
+
+	// Определяем путь для сохранения файла
+	uploadDir := "./uploads/" // Убедитесь, что директория существует
+	filename := strconv.FormatInt(time.Now().Unix(), 10) + "_" + header.Filename
+	filePath := uploadDir + filename
+
+	// Сохраняем файл
+	out, err := os.Create(filePath)
+	if err != nil {
+		http.Error(w, "Unable to save the file", http.StatusInternalServerError)
+		return
+	}
+	defer out.Close()
+	_, err = io.Copy(out, file)
+	if err != nil {
+		http.Error(w, "Failed to save the file", http.StatusInternalServerError)
+		return
+	}
+
+	// Создаем запись истории
 	var newStory story.Story
-	if err := json.NewDecoder(r.Body).Decode(&newStory); err != nil {
-		http.Error(w, "Bad request", http.StatusBadRequest)
-		return
-	}
-
-	if newStory.ContentURL == "" {
-		http.Error(w, "ContentURL is required", http.StatusBadRequest)
-		return
-	}
-
+	newStory.ContentURL = filePath // Указываем путь к файлу
 	newStory.UserID = claims.UserID
 	newStory.CreatedAt = time.Now().UTC()
 	newStory.ExpireAt = newStory.CreatedAt.Add(24 * time.Hour)

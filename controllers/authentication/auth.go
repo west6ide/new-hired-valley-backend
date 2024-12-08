@@ -30,6 +30,7 @@ func Register(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Хэшируем пароль
 	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(user.Password), bcrypt.DefaultCost)
 	if err != nil {
 		http.Error(w, "Error hashing password", http.StatusInternalServerError)
@@ -38,6 +39,7 @@ func Register(w http.ResponseWriter, r *http.Request) {
 	user.Password = string(hashedPassword)
 	user.Provider = "local"
 
+	// Создаем запись в базе данных
 	if err := config.DB.Create(&user).Error; err != nil {
 		http.Error(w, fmt.Sprintf("Error creating user: %v", err), http.StatusInternalServerError)
 		return
@@ -45,42 +47,7 @@ func Register(w http.ResponseWriter, r *http.Request) {
 
 	fmt.Printf("User registered with ID: %d\n", user.ID)
 
-	tokenString, err := generateToken(user.ID, user.Email, user.Role)
-	if err != nil {
-		http.Error(w, "Error generating token", http.StatusInternalServerError)
-		return
-	}
-
-	// Сохраняем токен в базе данных
-	if err := config.DB.Model(&user).Update("access_token", tokenString).Error; err != nil {
-		http.Error(w, "Error saving token", http.StatusInternalServerError)
-		return
-	}
-
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]string{"token": tokenString})
-}
-
-func Login(w http.ResponseWriter, r *http.Request) {
-	var inputUser users.User
-	if err := json.NewDecoder(r.Body).Decode(&inputUser); err != nil {
-		http.Error(w, "Invalid input", http.StatusBadRequest)
-		return
-	}
-
-	var user users.User
-	if err := config.DB.Where("email = ?", inputUser.Email).First(&user).Error; err != nil {
-		http.Error(w, "User not found", http.StatusUnauthorized)
-		return
-	}
-
-	if err := bcrypt.CompareHashAndPassword([]byte(user.Password), []byte(inputUser.Password)); err != nil {
-		http.Error(w, "Invalid password", http.StatusUnauthorized)
-		return
-	}
-
-	fmt.Printf("User logged in with ID: %d\n", user.ID)
-
+	// Генерируем токен
 	tokenString, err := generateToken(user.ID, user.Email, user.Role)
 	if err != nil {
 		http.Error(w, "Error generating token", http.StatusInternalServerError)
@@ -93,6 +60,47 @@ func Login(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Возвращаем токен
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]string{"token": tokenString})
+}
+
+func Login(w http.ResponseWriter, r *http.Request) {
+	var inputUser users.User
+	if err := json.NewDecoder(r.Body).Decode(&inputUser); err != nil {
+		http.Error(w, "Invalid input", http.StatusBadRequest)
+		return
+	}
+
+	// Проверяем пользователя в базе данных
+	var user users.User
+	if err := config.DB.Where("email = ?", inputUser.Email).First(&user).Error; err != nil {
+		http.Error(w, "User not found", http.StatusUnauthorized)
+		return
+	}
+
+	// Сравниваем хэш пароля
+	if err := bcrypt.CompareHashAndPassword([]byte(user.Password), []byte(inputUser.Password)); err != nil {
+		http.Error(w, "Invalid password", http.StatusUnauthorized)
+		return
+	}
+
+	fmt.Printf("User logged in with ID: %d\n", user.ID)
+
+	// Генерируем токен
+	tokenString, err := generateToken(user.ID, user.Email, user.Role)
+	if err != nil {
+		http.Error(w, "Error generating token", http.StatusInternalServerError)
+		return
+	}
+
+	// Сохраняем токен в базе данных
+	if err := config.DB.Model(&user).Update("token", tokenString).Error; err != nil {
+		http.Error(w, "Error saving token", http.StatusInternalServerError)
+		return
+	}
+
+	// Возвращаем токен
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]string{"token": tokenString})
 }

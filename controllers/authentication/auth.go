@@ -52,7 +52,7 @@ func Register(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Сохраняем токен в базе данных
-	if err := config.DB.Model(&user).Update("token", tokenString).Error; err != nil {
+	if err := config.DB.Model(&user).Update("access_token", tokenString).Error; err != nil {
 		http.Error(w, "Error saving token", http.StatusInternalServerError)
 		return
 	}

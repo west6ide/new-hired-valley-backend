@@ -55,8 +55,8 @@ func Register(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Сохраняем токен в базе данных
-	if err := config.DB.Model(&user).Update("accessToken", tokenString).Error; err != nil {
-		http.Error(w, "Error saving token", http.StatusInternalServerError)
+	if err := config.DB.Model(&user).Update("access_token", tokenString).Error; err != nil {
+		http.Error(w, "Error saving access token", http.StatusInternalServerError)
 		return
 	}
 
@@ -95,8 +95,8 @@ func Login(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Сохраняем токен в базе данных
-	if err := config.DB.Model(&user).Update("accessToken", tokenString).Error; err != nil {
-		http.Error(w, "Error saving token", http.StatusInternalServerError)
+	if err := config.DB.Model(&user).Update("access_token", tokenString).Error; err != nil {
+		http.Error(w, "Error saving access token", http.StatusInternalServerError)
 		return
 	}
 
@@ -121,8 +121,8 @@ func ValidateToken(r *http.Request) (*Claims, error) {
 	}
 
 	var user users.User
-	if err := config.DB.Where("id = ? AND token = ?", claims.UserID, tokenString).First(&user).Error; err != nil {
-		return nil, errors.New("token mismatch")
+	if err := config.DB.Where("id = ? AND access_token = ?", claims.UserID, tokenString).First(&user).Error; err != nil {
+		return nil, errors.New("access token mismatch")
 	}
 
 	fmt.Printf("Token validated with userID: %d\n", claims.UserID)
@@ -184,7 +184,7 @@ func Logout(w http.ResponseWriter, r *http.Request) {
 
 	claims := &Claims{}
 
-	if err := config.DB.Model(&users.User{}).Where("id = ?", claims.UserID).Update("token", "").Error; err != nil {
+	if err := config.DB.Model(&users.User{}).Where("id = ?", claims.UserID).Update("access_token", "").Error; err != nil {
 		http.Error(w, "Error logging out", http.StatusInternalServerError)
 		return
 	}

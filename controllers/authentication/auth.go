@@ -43,12 +43,17 @@ func Register(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Проверим, что ID пользователя установлен после создания
 	fmt.Printf("User registered with ID: %d\n", user.ID)
 
 	tokenString, err := generateToken(user.ID, user.Email, user.Role)
 	if err != nil {
 		http.Error(w, "Error generating token", http.StatusInternalServerError)
+		return
+	}
+
+	// Сохраняем токен в базе данных
+	if err := config.DB.Model(&user).Update("token", tokenString).Error; err != nil {
+		http.Error(w, "Error saving token", http.StatusInternalServerError)
 		return
 	}
 
@@ -74,12 +79,17 @@ func Login(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Проверим, что ID пользователя корректно извлечен перед генерацией токена
 	fmt.Printf("User logged in with ID: %d\n", user.ID)
 
 	tokenString, err := generateToken(user.ID, user.Email, user.Role)
 	if err != nil {
 		http.Error(w, "Error generating token", http.StatusInternalServerError)
+		return
+	}
+
+	// Сохраняем токен в базе данных
+	if err := config.DB.Model(&user).Update("token", tokenString).Error; err != nil {
+		http.Error(w, "Error saving token", http.StatusInternalServerError)
 		return
 	}
 
@@ -102,7 +112,12 @@ func ValidateToken(r *http.Request) (*Claims, error) {
 		return nil, errors.New("invalid token")
 	}
 
-	fmt.Printf("Token validated with userID: %d\n", claims.UserID) // Логируем userID для отладки
+	var user users.User
+	if err := config.DB.Where("id = ? AND token = ?", claims.UserID, tokenString).First(&user).Error; err != nil {
+		return nil, errors.New("token mismatch")
+	}
+
+	fmt.Printf("Token validated with userID: %d\n", claims.UserID)
 	return claims, nil
 }
 
@@ -117,14 +132,12 @@ func generateToken(userID uint, email, role string) (string, error) {
 		},
 	}
 
-	// Проверим, что `userID` передан и установлен правильно
 	fmt.Printf("Generating token with userID: %d\n", userID)
 
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
 	return token.SignedString(JwtKey)
 }
 
-// GetProfile: Получение профиля пользователя по токену
 func GetProfile(w http.ResponseWriter, r *http.Request) {
 	authHeader := r.Header.Get("Authorization")
 	if authHeader == "" {
@@ -132,7 +145,6 @@ func GetProfile(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Убираем "Bearer " из начала заголовка
 	tokenString := strings.TrimPrefix(authHeader, "Bearer ")
 	claims := &Claims{}
 
@@ -145,20 +157,30 @@ func GetProfile(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Поиск пользователя по email из токена и провайдеру "local"
 	var user users.User
 	if err := config.DB.Where("email = ? AND provider = ?", claims.Email, "local").First(&user).Error; err != nil {
 		http.Error(w, "User not found", http.StatusUnauthorized)
 		return
 	}
 
-	// Возвращаем информацию о пользователе
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(user)
 }
 
-// Logout: Инвалидировать сессию (удаление токена)
 func Logout(w http.ResponseWriter, r *http.Request) {
+	authHeader := r.Header.Get("Authorization")
+	if authHeader == "" {
+		http.Error(w, "Authorization header required", http.StatusUnauthorized)
+		return
+	}
+
+	claims := &Claims{}
+
+	if err := config.DB.Model(&users.User{}).Where("id = ?", claims.UserID).Update("token", "").Error; err != nil {
+		http.Error(w, "Error logging out", http.StatusInternalServerError)
+		return
+	}
+
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]string{"message": "Logged out successfully"})
 }

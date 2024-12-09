@@ -17,11 +17,12 @@ import (
 	"time"
 )
 
-// GoogleDriveUpload - загружает файл на Google Drive и возвращает идентификатор файла
+// GoogleDriveUpload - загружает файл на Google Drive и возвращает идентификатор файла и веб-ссылку
 func GoogleDriveUpload(file io.Reader, filename string, token *oauth2.Token) (string, string, error) {
 	ctx := context.Background()
 	client := authentication.GoogleOauthConfig.Client(ctx, token)
 
+	// Создание клиента Google Drive
 	srv, err := drive.New(client)
 	if err != nil {
 		return "", "", errors.New("unable to create Google Drive client: " + err.Error())
@@ -29,7 +30,7 @@ func GoogleDriveUpload(file io.Reader, filename string, token *oauth2.Token) (st
 
 	driveFile := &drive.File{
 		Name:    filename,
-		Parents: []string{"root"}, // Вы можете заменить "root" на ID папки
+		Parents: []string{"root"}, // Используйте нужный ID папки вместо "root", если требуется
 	}
 
 	uploadedFile, err := srv.Files.Create(driveFile).Media(file).Do()
@@ -42,12 +43,14 @@ func GoogleDriveUpload(file io.Reader, filename string, token *oauth2.Token) (st
 
 // CreateStory - создает историю и загружает файл в Google Drive
 func CreateStory(w http.ResponseWriter, r *http.Request) {
+	// Валидация токена авторизации
 	claims, err := authentication.ValidateToken(r)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusUnauthorized)
 		return
 	}
 
+	// Проверка метода запроса
 	if r.Method != http.MethodPost {
 		http.Error(w, "Invalid request method", http.StatusMethodNotAllowed)
 		return
@@ -61,6 +64,7 @@ func CreateStory(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Получение файла из формы
 	file, header, err := r.FormFile("file")
 	if err != nil {
 		http.Error(w, "File is required", http.StatusBadRequest)
@@ -68,13 +72,14 @@ func CreateStory(w http.ResponseWriter, r *http.Request) {
 	}
 	defer file.Close()
 
-	// Получение токена пользователя Google из модуля User
+	// Получение данных пользователя из базы данных
 	var userRecord users.User
 	if err := config.DB.First(&userRecord, claims.UserID).Error; err != nil {
 		http.Error(w, "Failed to retrieve user record", http.StatusInternalServerError)
 		return
 	}
 
+	// Проверка наличия Google AccessToken
 	if userRecord.AccessToken == "" {
 		http.Error(w, "User has not linked Google account", http.StatusBadRequest)
 		return
@@ -82,7 +87,7 @@ func CreateStory(w http.ResponseWriter, r *http.Request) {
 
 	userToken := &oauth2.Token{
 		AccessToken: userRecord.AccessToken,
-		TokenType:   "Bearer", // По умолчанию
+		TokenType:   "Bearer",
 	}
 
 	// Загрузка файла в Google Drive
@@ -92,20 +97,21 @@ func CreateStory(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Сохранение истории в базу данных
+	// Создание записи истории в базе данных
 	newStory := story.Story{
 		ContentURL:  webViewLink, // Ссылка на файл
 		DriveFileID: fileID,      // ID файла в Google Drive
 		UserID:      claims.UserID,
 		CreatedAt:   time.Now().UTC(),
-		ExpireAt:    time.Now().UTC().Add(24 * time.Hour),
+		ExpireAt:    time.Now().UTC().Add(24 * time.Hour), // История истекает через 24 часа
 	}
 
-	if result := config.DB.Create(&newStory); result.Error != nil {
+	if err := config.DB.Create(&newStory).Error; err != nil {
 		http.Error(w, "Failed to create story", http.StatusInternalServerError)
 		return
 	}
 
+	// Отправка ответа с информацией о созданной истории
 	w.WriteHeader(http.StatusCreated)
 	json.NewEncoder(w).Encode(newStory)
 }

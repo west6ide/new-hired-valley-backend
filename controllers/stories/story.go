@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"golang.org/x/oauth2"
 	"google.golang.org/api/drive/v3"
 	"gorm.io/gorm"
@@ -24,7 +25,7 @@ func GoogleDriveUpload(file io.Reader, filename string, token *oauth2.Token) (st
 
 	srv, err := drive.New(client)
 	if err != nil {
-		return "", "", errors.New("unable to create Google Drive client: " + err.Error())
+		return "", "", fmt.Errorf("unable to create Google Drive client: %w", err)
 	}
 
 	driveFile := &drive.File{
@@ -34,7 +35,7 @@ func GoogleDriveUpload(file io.Reader, filename string, token *oauth2.Token) (st
 
 	uploadedFile, err := srv.Files.Create(driveFile).Media(file).Do()
 	if err != nil {
-		return "", "", errors.New("unable to upload file to Google Drive: " + err.Error())
+		return "", "", fmt.Errorf("unable to upload file to Google Drive: %w", err)
 	}
 
 	return uploadedFile.Id, uploadedFile.WebViewLink, nil
@@ -67,6 +68,24 @@ func CreateStory(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	defer file.Close()
+
+	// Проверка MIME-типа файла
+	buffer := make([]byte, 512)
+	if _, err := file.Read(buffer); err != nil {
+		http.Error(w, "Failed to read file", http.StatusInternalServerError)
+		return
+	}
+	fileType := http.DetectContentType(buffer)
+	if fileType != "image/jpeg" && fileType != "image/png" && fileType != "video/mp4" {
+		http.Error(w, "Unsupported file type", http.StatusUnsupportedMediaType)
+		return
+	}
+
+	// Возврат курсора файла
+	if _, err := file.Seek(0, io.SeekStart); err != nil {
+		http.Error(w, "Failed to reset file pointer", http.StatusInternalServerError)
+		return
+	}
 
 	var userRecord users.User
 	if err := config.DB.First(&userRecord, claims.UserID).Error; err != nil {
@@ -105,7 +124,11 @@ func CreateStory(w http.ResponseWriter, r *http.Request) {
 
 	w.WriteHeader(http.StatusCreated)
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(newStory)
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"status":  "success",
+		"message": "Story created successfully",
+		"story":   newStory,
+	})
 }
 
 // Получение всех историй пользователя

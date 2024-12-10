@@ -5,7 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"golang.org/x/oauth2"
+	"golang.org/x/oauth2/google"
 	"google.golang.org/api/drive/v3"
 	"google.golang.org/api/option"
 	"gorm.io/gorm"
@@ -15,51 +15,49 @@ import (
 	"hired-valley-backend/models/users"
 	"mime/multipart"
 	"net/http"
+	"os"
 	"strconv"
 	"time"
 )
 
-// CreateStory - создаёт историю и загружает файл в Google Drive
+// Google Drive credentials file
+var serviceAccountFile = os.Getenv("DRIVE_JSON")
+
+// CreateStory - создает историю и загружает файл в Google Drive
 func CreateStory(w http.ResponseWriter, r *http.Request) {
-	// Проверяем Google OAuth токен
-	token, err := authentication.ValidateGoogleToken(r)
-	if err != nil {
-		http.Error(w, "Unauthorized or forbidden: "+err.Error(), http.StatusUnauthorized)
-		return
-	}
-
-	// Читаем файл из запроса
-	file, header, err := r.FormFile("file")
-	if err != nil {
-		http.Error(w, "Failed to read file", http.StatusBadRequest)
-		return
-	}
-	defer file.Close()
-
-	// Получаем пользователя из базы данных
+	// Validate Google OAuth Token
 	claims, err := authentication.ValidateToken(r)
 	if err != nil {
 		http.Error(w, "Unauthorized: "+err.Error(), http.StatusUnauthorized)
 		return
 	}
 
-	var userRecord users.GoogleUser
+	// Parse multipart form
+	file, header, err := r.FormFile("file")
+	if err != nil {
+		http.Error(w, "Failed to read file: "+err.Error(), http.StatusBadRequest)
+		return
+	}
+	defer file.Close()
+
+	// Validate user
+	var userRecord users.User
 	if err := config.DB.First(&userRecord, claims.UserID).Error; err != nil {
 		http.Error(w, "User not found", http.StatusNotFound)
 		return
 	}
 
-	// Укажите ID папки Google Drive, куда будут загружаться файлы
-	folderId := "1c4YaW6Qd3c8PyFXV43qSVQzWgPLysAs2"
+	// Folder ID in Google Drive
+	folderID := os.Getenv("GOOGLE_DRIVE_FOLDER_ID") // Укажите ID вашей папки
 
-	// Загрузка файла в Google Drive
-	fileID, webViewLink, err := uploadFileToDrive(file, header.Filename, token.AccessToken, folderId)
+	// Upload file to Google Drive
+	fileID, webViewLink, err := uploadFileToGoogleDrive(file, header.Filename, folderID)
 	if err != nil {
 		http.Error(w, "Failed to upload file to Google Drive: "+err.Error(), http.StatusInternalServerError)
 		return
 	}
 
-	// Сохраняем историю в базе данных
+	// Save story to the database
 	newStory := story.Story{
 		ContentURL:  webViewLink,
 		DriveFileID: fileID,
@@ -69,11 +67,11 @@ func CreateStory(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := config.DB.Create(&newStory).Error; err != nil {
-		http.Error(w, "Failed to create story", http.StatusInternalServerError)
+		http.Error(w, "Failed to save story: "+err.Error(), http.StatusInternalServerError)
 		return
 	}
 
-	// Успешный ответ
+	// Respond with success
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]interface{}{
 		"message":   "Story created successfully",
@@ -83,38 +81,52 @@ func CreateStory(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-// uploadFileToDrive - загружает файл в Google Drive с использованием Google OAuth токена
-func uploadFileToDrive(file multipart.File, fileName, accessToken, folderId string) (string, string, error) {
+// uploadFileToGoogleDrive - загружает файл в Google Drive
+func uploadFileToGoogleDrive(file multipart.File, fileName string, folderID string) (string, string, error) {
 	ctx := context.Background()
 
-	// Создаём токен OAuth вручную
-	token := &oauth2.Token{
-		AccessToken: accessToken,
-	}
-
-	// Создаем источник токена
-	tokenSource := authentication.GoogleOauthConfig.TokenSource(ctx, token)
-
-	// Создаём Google Drive сервис
-	service, err := drive.NewService(ctx, option.WithTokenSource(tokenSource))
+	// Authenticate with Google Drive API using a service account
+	client, err := getGoogleDriveClient()
 	if err != nil {
-		return "", "", fmt.Errorf("failed to create Drive service: %v", err)
+		return "", "", fmt.Errorf("failed to create Google Drive client: %v", err)
 	}
 
-	// Подготавливаем метаданные файла
+	// Create Google Drive service
+	service, err := drive.NewService(ctx, option.WithHTTPClient(client))
+	if err != nil {
+		return "", "", fmt.Errorf("failed to create Google Drive service: %v", err)
+	}
+
+	// Create file metadata
 	driveFile := &drive.File{
 		Name:    fileName,
-		Parents: []string{folderId}, // Укажите ID папки
+		Parents: []string{folderID},
 	}
 
-	// Загружаем файл
+	// Upload file to Google Drive
 	uploadedFile, err := service.Files.Create(driveFile).Media(file).Do()
 	if err != nil {
 		return "", "", fmt.Errorf("failed to upload file: %v", err)
 	}
 
-	// Возвращаем ID файла и ссылку на просмотр
+	// Return file ID and web view link
 	return uploadedFile.Id, uploadedFile.WebViewLink, nil
+}
+
+// getGoogleDriveClient - возвращает клиента Google Drive API
+func getGoogleDriveClient() (*http.Client, error) {
+	b, err := os.ReadFile(serviceAccountFile)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read service account file: %v", err)
+	}
+
+	// Authenticate with the service account
+	config, err := google.JWTConfigFromJSON(b, drive.DriveScope)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create JWT config: %v", err)
+	}
+
+	return config.Client(context.Background()), nil
 }
 
 // Получение всех историй пользователя

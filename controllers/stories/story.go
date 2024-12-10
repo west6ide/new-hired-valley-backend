@@ -19,8 +19,8 @@ import (
 	"time"
 )
 
+// GoogleDriveUploadWithOAuth - загружает файл в Google Drive и возвращает ссылки
 func GoogleDriveUploadWithOAuth(file io.Reader, filename, mimeType, folderId, accessToken string) (string, string, error) {
-	// Создаем клиента на основе accessToken
 	token := &oauth2.Token{
 		AccessToken: accessToken,
 	}
@@ -36,10 +36,10 @@ func GoogleDriveUploadWithOAuth(file io.Reader, filename, mimeType, folderId, ac
 	driveFile := &drive.File{
 		Name:     filename,
 		MimeType: mimeType,
-		Parents:  []string{folderId}, // Используем переданный folderId
+		Parents:  []string{folderId}, // ID папки
 	}
 
-	// Загрузка файла в Google Drive
+	// Загрузка файла
 	uploadedFile, err := srv.Files.Create(driveFile).Media(file).Do()
 	if err != nil {
 		return "", "", fmt.Errorf("failed to upload file: %v", err)
@@ -48,6 +48,7 @@ func GoogleDriveUploadWithOAuth(file io.Reader, filename, mimeType, folderId, ac
 	return uploadedFile.Id, uploadedFile.WebViewLink, nil
 }
 
+// CreateStory - создаёт историю и загружает файл в Google Drive
 func CreateStory(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		http.Error(w, "Invalid request method", http.StatusMethodNotAllowed)
@@ -101,9 +102,10 @@ func CreateStory(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Загрузка файла в Google Drive через пользовательский OAuth
-	folderId := "1c4YaW6Qd3c8PyFXV43qSVQzWgPLysAs2" // Укажите ID папки Google Drive
+	// Укажите папку Google Drive
+	folderId := "1c4YaW6Qd3c8PyFXV43qSVQzWgPLysAs2" // Укажите ID папки в Google Drive
 
+	// Загрузка файла в Google Drive через пользовательский OAuth
 	fileID, webViewLink, err := GoogleDriveUploadWithOAuth(file, header.Filename, fileType, folderId, userRecord.AccessToken)
 	if err != nil {
 		http.Error(w, "Failed to upload file to Google Drive: "+err.Error(), http.StatusInternalServerError)
@@ -124,6 +126,7 @@ func CreateStory(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Успешный ответ
 	w.WriteHeader(http.StatusCreated)
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]interface{}{

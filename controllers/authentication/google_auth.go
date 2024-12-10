@@ -207,23 +207,20 @@ func HandleGoogleCallback(w http.ResponseWriter, r *http.Request) {
 // ValidateGoogleToken - проверяет токен авторизации из заголовка запроса
 func ValidateGoogleToken(r *http.Request) (*oauth2.Token, error) {
 	authHeader := r.Header.Get("Authorization")
+	log.Printf("Authorization header: %s", authHeader) // Логируем заголовок
+
 	if authHeader == "" {
 		return nil, errors.New("missing Authorization header")
 	}
 
-	// Токен должен начинаться с "Bearer "
 	if len(authHeader) <= 7 || authHeader[:7] != "Bearer " {
 		return nil, errors.New("invalid Authorization header format")
 	}
 
-	// Извлечение токена
-	accessToken := authHeader[7:]
-	if accessToken == "" {
-		return nil, errors.New("missing token")
-	}
+	tokenString := authHeader[7:]
+	log.Printf("Extracted token: %s", tokenString) // Логируем токен
 
-	// Создаем и возвращаем токен OAuth2
 	return &oauth2.Token{
-		AccessToken: accessToken,
+		AccessToken: tokenString,
 	}, nil
 }

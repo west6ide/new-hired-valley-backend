@@ -14,6 +14,7 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"strconv"
 )
 
 var (
@@ -235,11 +236,19 @@ func ValidateGoogleToken(r *http.Request) (*users.GoogleUser, error) {
 		Sub       string `json:"sub"`
 		Email     string `json:"email"`
 		Audience  string `json:"aud"`
-		ExpiresIn int    `json:"expires_in"`
+		ExpiresIn string `json:"expires_in"` // Обновлено
 	}
 	if err := json.NewDecoder(resp.Body).Decode(&tokenInfo); err != nil {
 		return nil, fmt.Errorf("failed to parse token info: %v", err)
 	}
+
+	// Преобразуем `expires_in` в int
+	expiresIn, err := strconv.Atoi(tokenInfo.ExpiresIn)
+	if err != nil {
+		return nil, fmt.Errorf("invalid expires_in value: %v", err)
+	}
+
+	log.Printf("Token expires in: %d seconds", expiresIn)
 
 	// Проверяем, что токен принадлежит вашему клиенту
 	if tokenInfo.Audience != os.Getenv("GOOGLE_CLIENT_ID") {

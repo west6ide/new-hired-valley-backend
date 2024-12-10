@@ -12,6 +12,7 @@ import (
 	"hired-valley-backend/config"
 	"hired-valley-backend/controllers/authentication"
 	"hired-valley-backend/models/story"
+	"log"
 	"mime/multipart"
 	"net/http"
 	"os"
@@ -116,10 +117,22 @@ func GetUserStories(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Получаем истории пользователя
-	var stories []story.Story
-	config.DB.Where("user_id = ? AND expire_at > ? AND is_archived = ?", googleUser.UserID, time.Now().UTC(), false).Find(&stories)
+	// Логируем ID пользователя для проверки
+	log.Printf("Fetching stories for Google User ID: %d", googleUser.UserID)
 
+	// Получаем все истории пользователя, без фильтрации по is_archived
+	var stories []story.Story
+	result := config.DB.Where("user_id = ? AND expire_at > ?", googleUser.UserID, time.Now().UTC()).Find(&stories)
+	if result.Error != nil {
+		log.Printf("Database query error: %v", result.Error)
+		http.Error(w, "Internal server error", http.StatusInternalServerError)
+		return
+	}
+
+	// Логируем количество найденных историй
+	log.Printf("Stories found: %d", result.RowsAffected)
+
+	// Отправляем результат клиенту
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(stories)
 }

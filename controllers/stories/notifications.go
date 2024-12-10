@@ -23,14 +23,15 @@ func sendNotification(db *gorm.DB, userID uint, message string) {
 
 // GetNotifications - получение всех уведомлений для пользователя
 func GetNotifications(w http.ResponseWriter, r *http.Request, db *gorm.DB) {
-	claims, err := authentication.ValidateToken(r)
+	// Проверяем Google OAuth токен
+	googleUser, err := authentication.ValidateGoogleToken(r)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusUnauthorized)
+		http.Error(w, "Unauthorized: "+err.Error(), http.StatusUnauthorized)
 		return
 	}
 
 	var notifications []story.Notification
-	db.Where("user_id = ?", claims.UserID).Order("created_at DESC").Find(&notifications)
+	db.Where("user_id = ?", googleUser.UserID).Order("created_at DESC").Find(&notifications)
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(notifications)
@@ -38,9 +39,10 @@ func GetNotifications(w http.ResponseWriter, r *http.Request, db *gorm.DB) {
 
 // MarkNotificationAsRead - отметить уведомление как прочитанное
 func MarkNotificationAsRead(w http.ResponseWriter, r *http.Request, db *gorm.DB) {
-	claims, err := authentication.ValidateToken(r)
+	// Проверяем Google OAuth токен
+	googleUser, err := authentication.ValidateGoogleToken(r)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusUnauthorized)
+		http.Error(w, "Unauthorized: "+err.Error(), http.StatusUnauthorized)
 		return
 	}
 
@@ -51,7 +53,7 @@ func MarkNotificationAsRead(w http.ResponseWriter, r *http.Request, db *gorm.DB)
 		return
 	}
 
-	db.Model(&story.Notification{}).Where("id = ? AND user_id = ?", notificationID, claims.UserID).
+	db.Model(&story.Notification{}).Where("id = ? AND user_id = ?", notificationID, googleUser.UserID).
 		Update("is_read", true)
 
 	w.WriteHeader(http.StatusOK)
@@ -59,9 +61,10 @@ func MarkNotificationAsRead(w http.ResponseWriter, r *http.Request, db *gorm.DB)
 
 // DeleteNotification - удаление уведомления
 func DeleteNotification(w http.ResponseWriter, r *http.Request, db *gorm.DB) {
-	claims, err := authentication.ValidateToken(r)
+	// Проверяем Google OAuth токен
+	googleUser, err := authentication.ValidateGoogleToken(r)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusUnauthorized)
+		http.Error(w, "Unauthorized: "+err.Error(), http.StatusUnauthorized)
 		return
 	}
 
@@ -72,7 +75,7 @@ func DeleteNotification(w http.ResponseWriter, r *http.Request, db *gorm.DB) {
 		return
 	}
 
-	if result := db.Where("id = ? AND user_id = ?", notificationID, claims.UserID).Delete(&story.Notification{}); result.Error != nil {
+	if result := db.Where("id = ? AND user_id = ?", notificationID, googleUser.UserID).Delete(&story.Notification{}); result.Error != nil {
 		http.Error(w, "Failed to delete notification", http.StatusInternalServerError)
 		return
 	}

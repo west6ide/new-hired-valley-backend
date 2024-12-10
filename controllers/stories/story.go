@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"golang.org/x/oauth2"
 	"google.golang.org/api/drive/v3"
+	"google.golang.org/api/option"
 	"gorm.io/gorm"
 	"hired-valley-backend/config"
 	"hired-valley-backend/controllers/authentication"
@@ -18,30 +19,33 @@ import (
 	"time"
 )
 
-// GoogleDriveUpload - загружает файл на Google Drive и возвращает идентификатор файла и веб-ссылку
-func GoogleDriveUpload(file io.Reader, filename string, token *oauth2.Token) (string, string, error) {
+// GoogleDriveUploadWithToken - загружает файл в Google Drive, используя сохраненные токены
+func GoogleDriveUploadWithToken(file io.Reader, filename, accessToken string) (string, string, error) {
+	// Создаем клиент с использованием токена
 	ctx := context.Background()
-	client := authentication.GoogleOauthConfig.Client(ctx, token)
-
-	srv, err := drive.New(client)
+	driveService, err := drive.NewService(ctx, option.WithTokenSource(oauth2.StaticTokenSource(&oauth2.Token{
+		AccessToken: accessToken,
+		TokenType:   "Bearer",
+	})))
 	if err != nil {
-		return "", "", fmt.Errorf("unable to create Google Drive client: %w", err)
+		return "", "", fmt.Errorf("failed to create Drive service: %v", err)
 	}
 
+	// Создание метаданных файла
 	driveFile := &drive.File{
 		Name:    filename,
-		Parents: []string{"root"},
+		Parents: []string{"1c4YaW6Qd3c8PyFXV43qSVQzWgPLysAs2"}, // Укажите ID папки в Google Drive
 	}
 
-	uploadedFile, err := srv.Files.Create(driveFile).Media(file).Do()
+	// Загрузка файла
+	uploadFile, err := driveService.Files.Create(driveFile).Media(file).Do()
 	if err != nil {
-		return "", "", fmt.Errorf("unable to upload file to Google Drive: %w", err)
+		return "", "", fmt.Errorf("failed to upload file: %v", err)
 	}
 
-	return uploadedFile.Id, uploadedFile.WebViewLink, nil
+	return uploadFile.Id, uploadFile.WebViewLink, nil
 }
 
-// CreateStory - создает историю и загружает файл в Google Drive
 func CreateStory(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		http.Error(w, "Invalid request method", http.StatusMethodNotAllowed)
@@ -87,6 +91,7 @@ func CreateStory(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Получение токена пользователя из базы данных
 	var userRecord users.User
 	if err := config.DB.First(&userRecord, claims.UserID).Error; err != nil {
 		http.Error(w, "User not found", http.StatusNotFound)
@@ -98,17 +103,14 @@ func CreateStory(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	userToken := &oauth2.Token{
-		AccessToken: userRecord.AccessToken,
-		TokenType:   "Bearer",
-	}
-
-	fileID, webViewLink, err := GoogleDriveUpload(file, header.Filename, userToken)
+	// Загрузка файла в Google Drive
+	fileID, webViewLink, err := GoogleDriveUploadWithToken(file, header.Filename, userRecord.AccessToken)
 	if err != nil {
 		http.Error(w, "Failed to upload file to Google Drive: "+err.Error(), http.StatusInternalServerError)
 		return
 	}
 
+	// Сохранение истории в базе данных
 	newStory := story.Story{
 		ContentURL:  webViewLink,
 		DriveFileID: fileID,

@@ -220,24 +220,32 @@ func ValidateGoogleToken(r *http.Request) (*users.GoogleUser, error) {
 	accessToken := authHeader[7:]
 	log.Printf("Extracted token: %s", accessToken) // Логируем токен
 
-	// Получаем информацию о пользователе с помощью Google API
-	resp, err := http.Get("https://www.googleapis.com/oauth2/v3/tokeninfo?access_token=" + accessToken)
+	// Проверка токена через Google API
+	resp, err := http.Get("https://oauth2.googleapis.com/tokeninfo?access_token=" + accessToken)
 	if err != nil || resp.StatusCode != http.StatusOK {
+		body, _ := ioutil.ReadAll(resp.Body)
+		log.Printf("Google token verification failed: %s", string(body))
 		return nil, errors.New("failed to validate token or invalid token")
 	}
 	defer resp.Body.Close()
 
-	// Парсим ответ от Google API
+	// Парсим ответ
 	var tokenInfo struct {
 		UserID    string `json:"sub"`
 		Email     string `json:"email"`
 		ExpiresIn int    `json:"expires_in"`
+		Audience  string `json:"aud"`
 	}
 	if err := json.NewDecoder(resp.Body).Decode(&tokenInfo); err != nil {
 		return nil, errors.New("failed to parse token info")
 	}
 
-	// Проверяем, есть ли пользователь в базе данных
+	// Проверяем, что токен для вашего клиента
+	if tokenInfo.Audience != os.Getenv("GOOGLE_CLIENT_ID") {
+		return nil, errors.New("invalid token audience")
+	}
+
+	// Проверяем наличие пользователя в базе данных
 	var googleUser users.GoogleUser
 	if err := config.DB.Where("google_id = ?", tokenInfo.UserID).First(&googleUser).Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
@@ -246,7 +254,7 @@ func ValidateGoogleToken(r *http.Request) (*users.GoogleUser, error) {
 		return nil, errors.New("database error: " + err.Error())
 	}
 
-	// Возвращаем GoogleUser с AccessToken
+	// Обновляем AccessToken
 	googleUser.AccessToken = accessToken
 	return &googleUser, nil
 }

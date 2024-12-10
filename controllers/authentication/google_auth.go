@@ -6,6 +6,7 @@ import (
 	"github.com/gorilla/sessions"
 	"golang.org/x/oauth2"
 	"golang.org/x/oauth2/google"
+	"google.golang.org/api/drive/v3"
 	"gorm.io/gorm"
 	"hired-valley-backend/config"
 	"hired-valley-backend/models/users"
@@ -20,12 +21,12 @@ var (
 		RedirectURL:  os.Getenv("GOOGLE_REDIRECT_URL"),
 		ClientID:     os.Getenv("GOOGLE_CLIENT_ID"),
 		ClientSecret: os.Getenv("GOOGLE_CLIENT_SECRET"),
-		Scopes: []string{"https://www.googleapis.com/auth/drive",
-			"https://www.googleapis.com/auth/drive.file",
+		Scopes: []string{
 			"https://www.googleapis.com/auth/youtube.force-ssl",
 			"https://www.googleapis.com/auth/youtube.upload",
 			"https://www.googleapis.com/auth/userinfo.email",
-			"https://www.googleapis.com/auth/userinfo.profile"},
+			"https://www.googleapis.com/auth/userinfo.profile",
+			drive.DriveFileScope},
 		Endpoint: google.Endpoint,
 	}
 	store = sessions.NewCookieStore([]byte(os.Getenv("SESSION_SECRET")))

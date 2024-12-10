@@ -3,6 +3,7 @@ package authentication
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
 	"github.com/gorilla/sessions"
 	"golang.org/x/oauth2"
 	"golang.org/x/oauth2/google"
@@ -207,8 +208,6 @@ func HandleGoogleCallback(w http.ResponseWriter, r *http.Request) {
 
 func ValidateGoogleToken(r *http.Request) (*users.GoogleUser, error) {
 	authHeader := r.Header.Get("Authorization")
-	log.Printf("Authorization header: %s", authHeader) // Логируем заголовок
-
 	if authHeader == "" {
 		return nil, errors.New("missing Authorization header")
 	}
@@ -218,43 +217,49 @@ func ValidateGoogleToken(r *http.Request) (*users.GoogleUser, error) {
 	}
 
 	accessToken := authHeader[7:]
-	log.Printf("Extracted token: %s", accessToken) // Логируем токен
 
 	// Проверка токена через Google API
 	resp, err := http.Get("https://oauth2.googleapis.com/tokeninfo?access_token=" + accessToken)
-	if err != nil || resp.StatusCode != http.StatusOK {
-		body, _ := ioutil.ReadAll(resp.Body)
-		log.Printf("Google token verification failed: %s", string(body))
-		return nil, errors.New("failed to validate token or invalid token")
+	if err != nil {
+		return nil, fmt.Errorf("failed to validate token: %v", err)
 	}
 	defer resp.Body.Close()
 
-	// Парсим ответ
-	var tokenInfo struct {
-		UserID    string `json:"sub"`
-		Email     string `json:"email"`
-		ExpiresIn int    `json:"expires_in"`
-		Audience  string `json:"aud"`
-	}
-	if err := json.NewDecoder(resp.Body).Decode(&tokenInfo); err != nil {
-		return nil, errors.New("failed to parse token info")
+	if resp.StatusCode != http.StatusOK {
+		body, _ := ioutil.ReadAll(resp.Body)
+		return nil, fmt.Errorf("invalid token: %s", string(body))
 	}
 
-	// Проверяем, что токен для вашего клиента
+	// Парсим ответ
+	var tokenInfo struct {
+		Sub       string `json:"sub"`
+		Email     string `json:"email"`
+		Audience  string `json:"aud"`
+		ExpiresIn int    `json:"expires_in"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&tokenInfo); err != nil {
+		return nil, fmt.Errorf("failed to parse token info: %v", err)
+	}
+
+	// Проверяем, что токен принадлежит вашему клиенту
 	if tokenInfo.Audience != os.Getenv("GOOGLE_CLIENT_ID") {
 		return nil, errors.New("invalid token audience")
 	}
 
-	// Проверяем наличие пользователя в базе данных
+	// Проверяем пользователя в базе данных
 	var googleUser users.GoogleUser
-	if err := config.DB.Where("google_id = ?", tokenInfo.UserID).First(&googleUser).Error; err != nil {
+	if err := config.DB.Where("google_id = ?", tokenInfo.Sub).First(&googleUser).Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return nil, errors.New("user not found in the database")
 		}
-		return nil, errors.New("database error: " + err.Error())
+		return nil, fmt.Errorf("database error: %v", err)
 	}
 
-	// Обновляем AccessToken
+	// Обновляем токен
 	googleUser.AccessToken = accessToken
+	if err := config.DB.Save(&googleUser).Error; err != nil {
+		return nil, fmt.Errorf("failed to update access token: %v", err)
+	}
+
 	return &googleUser, nil
 }

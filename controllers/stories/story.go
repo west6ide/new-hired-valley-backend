@@ -13,7 +13,6 @@ import (
 	"hired-valley-backend/config"
 	"hired-valley-backend/controllers/authentication"
 	"hired-valley-backend/models/story"
-	"hired-valley-backend/models/users"
 	"mime/multipart"
 	"net/http"
 	"os"
@@ -26,8 +25,8 @@ var serviceAccountFile = os.Getenv("DRIVE_JSON")
 
 // CreateStory - создает историю и загружает файл в Google Drive
 func CreateStory(w http.ResponseWriter, r *http.Request) {
-	// Validate JWT Token and get claims
-	claims, err := authentication.ValidateToken(r)
+	// Validate Google OAuth Token
+	googleUser, err := authentication.ValidateGoogleToken(r)
 	if err != nil {
 		http.Error(w, "Unauthorized: "+err.Error(), http.StatusUnauthorized)
 		return
@@ -41,21 +40,8 @@ func CreateStory(w http.ResponseWriter, r *http.Request) {
 	}
 	defer file.Close()
 
-	// Get GoogleUser record
-	var googleUser users.GoogleUser
-	if err := config.DB.Where("user_id = ?", claims.UserID).First(&googleUser).Error; err != nil {
-		http.Error(w, "Google account not linked or user not found", http.StatusForbidden)
-		return
-	}
-
-	// Check if access token exists
-	if googleUser.AccessToken == "" {
-		http.Error(w, "No Google OAuth token found for the user", http.StatusForbidden)
-		return
-	}
-
 	// Folder ID in Google Drive
-	folderID := os.Getenv("GOOGLE_DRIVE_FOLDER_ID") // Укажите ID вашей папки
+	folderID := os.Getenv("GOOGLE_DRIVE_FOLDER_ID")
 
 	// Upload file to Google Drive
 	fileID, webViewLink, err := uploadFileToGoogleDrive(file, header.Filename, googleUser.AccessToken, folderID)
@@ -68,7 +54,7 @@ func CreateStory(w http.ResponseWriter, r *http.Request) {
 	newStory := story.Story{
 		ContentURL:  webViewLink,
 		DriveFileID: fileID,
-		UserID:      claims.UserID,
+		UserID:      googleUser.UserID, // Используем UserID из GoogleUser
 		CreatedAt:   time.Now().UTC(),
 		ExpireAt:    time.Now().UTC().Add(24 * time.Hour),
 	}

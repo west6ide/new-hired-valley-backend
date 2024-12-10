@@ -6,7 +6,6 @@ import (
 	"errors"
 	"fmt"
 	"golang.org/x/oauth2"
-	"golang.org/x/oauth2/google"
 	"google.golang.org/api/drive/v3"
 	"google.golang.org/api/option"
 	"gorm.io/gorm"
@@ -108,32 +107,18 @@ func uploadFileToGoogleDrive(file multipart.File, fileName string, accessToken s
 	return uploadedFile.Id, uploadedFile.WebViewLink, nil
 }
 
-// getGoogleDriveClient - возвращает клиента Google Drive API
-func getGoogleDriveClient() (*http.Client, error) {
-	b, err := os.ReadFile(serviceAccountFile)
-	if err != nil {
-		return nil, fmt.Errorf("failed to read service account file: %v", err)
-	}
-
-	// Authenticate with the service account
-	config, err := google.JWTConfigFromJSON(b, drive.DriveScope)
-	if err != nil {
-		return nil, fmt.Errorf("failed to create JWT config: %v", err)
-	}
-
-	return config.Client(context.Background()), nil
-}
-
 // Получение всех историй пользователя
 func GetUserStories(w http.ResponseWriter, r *http.Request) {
-	claims, err := authentication.ValidateToken(r)
+	// Проверяем Google OAuth токен
+	googleUser, err := authentication.ValidateGoogleToken(r)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusUnauthorized)
+		http.Error(w, "Unauthorized: "+err.Error(), http.StatusUnauthorized)
 		return
 	}
 
+	// Получаем истории пользователя
 	var stories []story.Story
-	config.DB.Where("user_id = ? AND expire_at > ? AND is_archived = ?", claims.UserID, time.Now().UTC(), false).Find(&stories)
+	config.DB.Where("user_id = ? AND expire_at > ? AND is_archived = ?", googleUser.UserID, time.Now().UTC(), false).Find(&stories)
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(stories)
@@ -141,9 +126,10 @@ func GetUserStories(w http.ResponseWriter, r *http.Request) {
 
 // Просмотр одной истории
 func ViewStory(w http.ResponseWriter, r *http.Request) {
-	claims, err := authentication.ValidateToken(r)
+	// Проверяем Google OAuth токен
+	googleUser, err := authentication.ValidateGoogleToken(r)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusUnauthorized)
+		http.Error(w, "Unauthorized: "+err.Error(), http.StatusUnauthorized)
 		return
 	}
 
@@ -160,7 +146,7 @@ func ViewStory(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if currentStory.UserID != claims.UserID && currentStory.Privacy != "public" {
+	if currentStory.UserID != googleUser.UserID && currentStory.Privacy != "public" {
 		http.Error(w, "Forbidden", http.StatusForbidden)
 		return
 	}
@@ -177,9 +163,10 @@ func ViewStory(w http.ResponseWriter, r *http.Request) {
 
 // Архивирование истории
 func ArchiveStory(w http.ResponseWriter, r *http.Request) {
-	claims, err := authentication.ValidateToken(r)
+	// Проверяем Google OAuth токен
+	googleUser, err := authentication.ValidateGoogleToken(r)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusUnauthorized)
+		http.Error(w, "Unauthorized: "+err.Error(), http.StatusUnauthorized)
 		return
 	}
 
@@ -196,7 +183,7 @@ func ArchiveStory(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if currentStory.UserID != claims.UserID {
+	if currentStory.UserID != googleUser.UserID {
 		http.Error(w, "Forbidden", http.StatusForbidden)
 		return
 	}
@@ -211,11 +198,12 @@ func ArchiveStory(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(currentStory)
 }
 
-// UpdateStory - обновление информации об истории
+// Обновление информации об истории
 func UpdateStory(w http.ResponseWriter, r *http.Request) {
-	claims, err := authentication.ValidateToken(r)
+	// Проверяем Google OAuth токен
+	googleUser, err := authentication.ValidateGoogleToken(r)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusUnauthorized)
+		http.Error(w, "Unauthorized: "+err.Error(), http.StatusUnauthorized)
 		return
 	}
 
@@ -237,7 +225,7 @@ func UpdateStory(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if currentStory.UserID != claims.UserID {
+	if currentStory.UserID != googleUser.UserID {
 		http.Error(w, "Forbidden", http.StatusForbidden)
 		return
 	}
@@ -272,9 +260,10 @@ func UpdateStory(w http.ResponseWriter, r *http.Request) {
 
 // Удаление истории
 func DeleteStory(w http.ResponseWriter, r *http.Request) {
-	claims, err := authentication.ValidateToken(r)
+	// Проверяем Google OAuth токен
+	googleUser, err := authentication.ValidateGoogleToken(r)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusUnauthorized)
+		http.Error(w, "Unauthorized: "+err.Error(), http.StatusUnauthorized)
 		return
 	}
 
@@ -291,7 +280,7 @@ func DeleteStory(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if currentStory.UserID != claims.UserID {
+	if currentStory.UserID != googleUser.UserID {
 		http.Error(w, "Forbidden", http.StatusForbidden)
 		return
 	}

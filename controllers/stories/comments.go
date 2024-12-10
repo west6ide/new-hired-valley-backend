@@ -14,9 +14,10 @@ import (
 
 // CreateComment - добавление нового комментария
 func CreateComment(w http.ResponseWriter, r *http.Request, db *gorm.DB) {
-	claims, err := authentication.ValidateToken(r)
+	// Проверяем Google OAuth токен
+	googleUser, err := authentication.ValidateGoogleToken(r)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusUnauthorized)
+		http.Error(w, "Unauthorized: "+err.Error(), http.StatusUnauthorized)
 		return
 	}
 
@@ -31,7 +32,8 @@ func CreateComment(w http.ResponseWriter, r *http.Request, db *gorm.DB) {
 		return
 	}
 
-	comment.UserID = claims.UserID
+	// Устанавливаем UserID текущего пользователя
+	comment.UserID = googleUser.UserID
 	comment.CreatedAt = time.Now().UTC()
 
 	if result := db.Create(&comment); result.Error != nil {
@@ -42,7 +44,7 @@ func CreateComment(w http.ResponseWriter, r *http.Request, db *gorm.DB) {
 	// Уведомление владельца истории
 	var storyOwner story.Story
 	if err := db.First(&storyOwner, comment.StoryID).Error; err == nil {
-		sendNotification(db, storyOwner.UserID, fmt.Sprintf("User %d commented on your story", claims.UserID))
+		sendNotification(db, storyOwner.UserID, fmt.Sprintf("User %d commented on your story", googleUser.UserID))
 	}
 
 	w.WriteHeader(http.StatusCreated)
@@ -51,6 +53,13 @@ func CreateComment(w http.ResponseWriter, r *http.Request, db *gorm.DB) {
 
 // GetComments - получение всех комментариев для истории
 func GetComments(w http.ResponseWriter, r *http.Request, db *gorm.DB) {
+	// Проверяем Google OAuth токен
+	_, err := authentication.ValidateGoogleToken(r)
+	if err != nil {
+		http.Error(w, "Unauthorized: "+err.Error(), http.StatusUnauthorized)
+		return
+	}
+
 	storyIDStr := r.URL.Query().Get("story_id")
 	storyID, err := strconv.Atoi(storyIDStr)
 	if err != nil {
@@ -67,9 +76,10 @@ func GetComments(w http.ResponseWriter, r *http.Request, db *gorm.DB) {
 
 // UpdateComment - обновление комментария
 func UpdateComment(w http.ResponseWriter, r *http.Request, db *gorm.DB) {
-	claims, err := authentication.ValidateToken(r)
+	// Проверяем Google OAuth токен
+	googleUser, err := authentication.ValidateGoogleToken(r)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusUnauthorized)
+		http.Error(w, "Unauthorized: "+err.Error(), http.StatusUnauthorized)
 		return
 	}
 
@@ -91,7 +101,7 @@ func UpdateComment(w http.ResponseWriter, r *http.Request, db *gorm.DB) {
 		return
 	}
 
-	if existingComment.UserID != claims.UserID {
+	if existingComment.UserID != googleUser.UserID {
 		http.Error(w, "Forbidden", http.StatusForbidden)
 		return
 	}
@@ -114,9 +124,10 @@ func UpdateComment(w http.ResponseWriter, r *http.Request, db *gorm.DB) {
 
 // DeleteComment - удаление комментария
 func DeleteComment(w http.ResponseWriter, r *http.Request, db *gorm.DB) {
-	claims, err := authentication.ValidateToken(r)
+	// Проверяем Google OAuth токен
+	googleUser, err := authentication.ValidateGoogleToken(r)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusUnauthorized)
+		http.Error(w, "Unauthorized: "+err.Error(), http.StatusUnauthorized)
 		return
 	}
 
@@ -138,7 +149,7 @@ func DeleteComment(w http.ResponseWriter, r *http.Request, db *gorm.DB) {
 		return
 	}
 
-	if comment.UserID != claims.UserID {
+	if comment.UserID != googleUser.UserID {
 		http.Error(w, "Forbidden", http.StatusForbidden)
 		return
 	}

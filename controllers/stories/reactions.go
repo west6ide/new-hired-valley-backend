@@ -14,9 +14,10 @@ import (
 
 // AddReaction - добавление реакции
 func AddReaction(w http.ResponseWriter, r *http.Request, db *gorm.DB) {
-	claims, err := authentication.ValidateToken(r)
+	// Проверяем Google OAuth токен
+	googleUser, err := authentication.ValidateGoogleToken(r)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusUnauthorized)
+		http.Error(w, "Unauthorized: "+err.Error(), http.StatusUnauthorized)
 		return
 	}
 
@@ -31,7 +32,7 @@ func AddReaction(w http.ResponseWriter, r *http.Request, db *gorm.DB) {
 		return
 	}
 
-	reaction.UserID = claims.UserID
+	reaction.UserID = googleUser.UserID
 	reaction.CreatedAt = time.Now().UTC()
 
 	if result := db.Create(&reaction); result.Error != nil {
@@ -42,7 +43,7 @@ func AddReaction(w http.ResponseWriter, r *http.Request, db *gorm.DB) {
 	// Уведомление владельца истории
 	var storyOwner story.Story
 	if err := db.First(&storyOwner, reaction.StoryID).Error; err == nil {
-		sendNotification(db, storyOwner.UserID, fmt.Sprintf("User %d reacted to your story", claims.UserID))
+		sendNotification(db, storyOwner.UserID, fmt.Sprintf("User %d reacted to your story", googleUser.UserID))
 	}
 
 	w.WriteHeader(http.StatusCreated)
@@ -67,9 +68,10 @@ func GetReactions(w http.ResponseWriter, r *http.Request, db *gorm.DB) {
 
 // UpdateReaction - обновление реакции
 func UpdateReaction(w http.ResponseWriter, r *http.Request, db *gorm.DB) {
-	claims, err := authentication.ValidateToken(r)
+	// Проверяем Google OAuth токен
+	googleUser, err := authentication.ValidateGoogleToken(r)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusUnauthorized)
+		http.Error(w, "Unauthorized: "+err.Error(), http.StatusUnauthorized)
 		return
 	}
 
@@ -91,7 +93,7 @@ func UpdateReaction(w http.ResponseWriter, r *http.Request, db *gorm.DB) {
 		return
 	}
 
-	if existingReaction.UserID != claims.UserID {
+	if existingReaction.UserID != googleUser.UserID {
 		http.Error(w, "Forbidden", http.StatusForbidden)
 		return
 	}
@@ -114,9 +116,10 @@ func UpdateReaction(w http.ResponseWriter, r *http.Request, db *gorm.DB) {
 
 // DeleteReaction - удаление реакции
 func DeleteReaction(w http.ResponseWriter, r *http.Request, db *gorm.DB) {
-	claims, err := authentication.ValidateToken(r)
+	// Проверяем Google OAuth токен
+	googleUser, err := authentication.ValidateGoogleToken(r)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusUnauthorized)
+		http.Error(w, "Unauthorized: "+err.Error(), http.StatusUnauthorized)
 		return
 	}
 
@@ -138,7 +141,7 @@ func DeleteReaction(w http.ResponseWriter, r *http.Request, db *gorm.DB) {
 		return
 	}
 
-	if reaction.UserID != claims.UserID {
+	if reaction.UserID != googleUser.UserID {
 		http.Error(w, "Forbidden", http.StatusForbidden)
 		return
 	}

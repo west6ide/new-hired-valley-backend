@@ -43,7 +43,7 @@ func CreateStory(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var userRecord users.User
+	var userRecord users.GoogleUser
 	if err := config.DB.First(&userRecord, claims.UserID).Error; err != nil {
 		http.Error(w, "User not found", http.StatusNotFound)
 		return

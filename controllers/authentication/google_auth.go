@@ -3,10 +3,10 @@ package authentication
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
 	"github.com/gorilla/sessions"
 	"golang.org/x/oauth2"
 	"golang.org/x/oauth2/google"
-	"google.golang.org/api/drive/v3"
 	"gorm.io/gorm"
 	"hired-valley-backend/config"
 	"hired-valley-backend/models/users"
@@ -26,7 +26,9 @@ var (
 			"https://www.googleapis.com/auth/youtube.upload",
 			"https://www.googleapis.com/auth/userinfo.email",
 			"https://www.googleapis.com/auth/userinfo.profile",
-			drive.DriveFileScope},
+			"https://www.googleapis.com/auth/drive",
+			"https://www.googleapis.com/auth/drive.file",
+		},
 		Endpoint: google.Endpoint,
 	}
 	store = sessions.NewCookieStore([]byte(os.Getenv("SESSION_SECRET")))
@@ -207,20 +209,24 @@ func HandleGoogleCallback(w http.ResponseWriter, r *http.Request) {
 // ValidateGoogleToken - проверяет токен авторизации из заголовка запроса
 func ValidateGoogleToken(r *http.Request) (*oauth2.Token, error) {
 	authHeader := r.Header.Get("Authorization")
-	log.Printf("Authorization header: %s", authHeader) // Логируем заголовок
-
 	if authHeader == "" {
 		return nil, errors.New("missing Authorization header")
 	}
 
+	// Проверяем формат заголовка
 	if len(authHeader) <= 7 || authHeader[:7] != "Bearer " {
 		return nil, errors.New("invalid Authorization header format")
 	}
 
-	tokenString := authHeader[7:]
-	log.Printf("Extracted token: %s", tokenString) // Логируем токен
+	token := authHeader[7:]
+	// Проверяем токен с помощью Google API
+	resp, err := http.Get(fmt.Sprintf("https://www.googleapis.com/oauth2/v1/tokeninfo?access_token=%s", token))
+	if err != nil || resp.StatusCode != http.StatusOK {
+		return nil, errors.New("invalid or expired token")
+	}
 
+	// Если токен действителен, возвращаем его
 	return &oauth2.Token{
-		AccessToken: tokenString,
+		AccessToken: token,
 	}, nil
 }

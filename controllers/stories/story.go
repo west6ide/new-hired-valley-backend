@@ -13,106 +13,53 @@ import (
 	"hired-valley-backend/controllers/authentication"
 	"hired-valley-backend/models/story"
 	"hired-valley-backend/models/users"
-	"io"
+	"mime/multipart"
 	"net/http"
 	"strconv"
 	"time"
 )
 
-// GoogleDriveUploadWithOAuth - загружает файл в Google Drive и возвращает ссылки
-func GoogleDriveUploadWithOAuth(file io.Reader, filename, mimeType, folderId, accessToken string) (string, string, error) {
-	token := &oauth2.Token{
-		AccessToken: accessToken,
-	}
-	client := authentication.GoogleOauthConfig.Client(context.Background(), token)
-
-	// Инициализация службы Google Drive
-	srv, err := drive.NewService(context.Background(), option.WithHTTPClient(client))
-	if err != nil {
-		return "", "", fmt.Errorf("unable to retrieve Drive client: %v", err)
-	}
-
-	// Создание метаданных файла
-	driveFile := &drive.File{
-		Name:     filename,
-		MimeType: mimeType,
-		Parents:  []string{folderId}, // ID папки
-	}
-
-	// Загрузка файла
-	uploadedFile, err := srv.Files.Create(driveFile).Media(file).Do()
-	if err != nil {
-		return "", "", fmt.Errorf("failed to upload file: %v", err)
-	}
-
-	return uploadedFile.Id, uploadedFile.WebViewLink, nil
-}
-
 // CreateStory - создаёт историю и загружает файл в Google Drive
 func CreateStory(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodPost {
-		http.Error(w, "Invalid request method", http.StatusMethodNotAllowed)
+	// Проверяем Google OAuth токен
+	token, err := authentication.ValidateGoogleToken(r)
+	if err != nil {
+		http.Error(w, "Unauthorized or forbidden: "+err.Error(), http.StatusUnauthorized)
 		return
 	}
 
+	// Читаем файл из запроса
+	file, header, err := r.FormFile("file")
+	if err != nil {
+		http.Error(w, "Failed to read file", http.StatusBadRequest)
+		return
+	}
+	defer file.Close()
+
+	// Получаем пользователя из базы данных
 	claims, err := authentication.ValidateToken(r)
 	if err != nil {
 		http.Error(w, "Unauthorized: "+err.Error(), http.StatusUnauthorized)
 		return
 	}
 
-	const maxUploadSize = 10 * 1024 * 1024 // 10 MB
-	r.Body = http.MaxBytesReader(w, r.Body, maxUploadSize)
-
-	if err := r.ParseMultipartForm(maxUploadSize); err != nil {
-		http.Error(w, "File too large or invalid form data", http.StatusRequestEntityTooLarge)
-		return
-	}
-
-	file, header, err := r.FormFile("file")
-	if err != nil {
-		http.Error(w, "File is required", http.StatusBadRequest)
-		return
-	}
-	defer file.Close()
-
-	// Проверка MIME-типа файла
-	buffer := make([]byte, 512)
-	if _, err := file.Read(buffer); err != nil {
-		http.Error(w, "Failed to read file", http.StatusInternalServerError)
-		return
-	}
-	fileType := http.DetectContentType(buffer)
-
-	// Возврат курсора файла
-	if _, err := file.Seek(0, io.SeekStart); err != nil {
-		http.Error(w, "Failed to reset file pointer", http.StatusInternalServerError)
-		return
-	}
-
-	// Получение токена пользователя из базы данных
 	var userRecord users.User
 	if err := config.DB.First(&userRecord, claims.UserID).Error; err != nil {
 		http.Error(w, "User not found", http.StatusNotFound)
 		return
 	}
 
-	if userRecord.AccessToken == "" {
-		http.Error(w, "Google account is not linked", http.StatusForbidden)
-		return
-	}
+	// Укажите ID папки Google Drive, куда будут загружаться файлы
+	folderId := "1c4YaW6Qd3c8PyFXV43qSVQzWgPLysAs2"
 
-	// Укажите папку Google Drive
-	folderId := "1c4YaW6Qd3c8PyFXV43qSVQzWgPLysAs2" // Укажите ID папки в Google Drive
-
-	// Загрузка файла в Google Drive через пользовательский OAuth
-	fileID, webViewLink, err := GoogleDriveUploadWithOAuth(file, header.Filename, fileType, folderId, userRecord.AccessToken)
+	// Загрузка файла в Google Drive
+	fileID, webViewLink, err := uploadFileToDrive(file, header.Filename, token.AccessToken, folderId)
 	if err != nil {
 		http.Error(w, "Failed to upload file to Google Drive: "+err.Error(), http.StatusInternalServerError)
 		return
 	}
 
-	// Сохранение истории в базе данных
+	// Сохраняем историю в базе данных
 	newStory := story.Story{
 		ContentURL:  webViewLink,
 		DriveFileID: fileID,
@@ -127,13 +74,47 @@ func CreateStory(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Успешный ответ
-	w.WriteHeader(http.StatusCreated)
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]interface{}{
-		"status":  "success",
-		"message": "Story created successfully",
-		"story":   newStory,
+		"message":   "Story created successfully",
+		"story_url": webViewLink,
+		"story_id":  newStory.ID,
+		"story":     newStory,
 	})
+}
+
+// uploadFileToDrive - загружает файл в Google Drive с использованием Google OAuth токена
+func uploadFileToDrive(file multipart.File, fileName, accessToken, folderId string) (string, string, error) {
+	ctx := context.Background()
+
+	// Создаём токен OAuth вручную
+	token := &oauth2.Token{
+		AccessToken: accessToken,
+	}
+
+	// Создаем источник токена
+	tokenSource := authentication.GoogleOauthConfig.TokenSource(ctx, token)
+
+	// Создаём Google Drive сервис
+	service, err := drive.NewService(ctx, option.WithTokenSource(tokenSource))
+	if err != nil {
+		return "", "", fmt.Errorf("failed to create Drive service: %v", err)
+	}
+
+	// Подготавливаем метаданные файла
+	driveFile := &drive.File{
+		Name:    fileName,
+		Parents: []string{folderId}, // Укажите ID папки
+	}
+
+	// Загружаем файл
+	uploadedFile, err := service.Files.Create(driveFile).Media(file).Do()
+	if err != nil {
+		return "", "", fmt.Errorf("failed to upload file: %v", err)
+	}
+
+	// Возвращаем ID файла и ссылку на просмотр
+	return uploadedFile.Id, uploadedFile.WebViewLink, nil
 }
 
 // Получение всех историй пользователя

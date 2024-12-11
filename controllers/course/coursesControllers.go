@@ -6,7 +6,6 @@ import (
 	"hired-valley-backend/config"
 	"hired-valley-backend/controllers/authentication"
 	"hired-valley-backend/models/courses"
-	"log"
 	"net/http"
 	"strconv"
 	"strings"
@@ -80,7 +79,6 @@ func CreateCourse(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Авторизация через токен
 	authHeader := r.Header.Get("Authorization")
 	if authHeader == "" {
 		http.Error(w, "Authorization header required", http.StatusUnauthorized)
@@ -105,16 +103,12 @@ func CreateCourse(w http.ResponseWriter, r *http.Request) {
 
 	var course courses.Course
 	if err := json.NewDecoder(r.Body).Decode(&course); err != nil {
-		log.Printf("Ошибка декодирования данных: %v", err)
 		http.Error(w, "Invalid input", http.StatusBadRequest)
 		return
 	}
 
 	course.InstructorID = claims.UserID
-	log.Printf("Создание курса: %+v", course)
-
 	if err := config.DB.Create(&course).Error; err != nil {
-		log.Printf("Ошибка при создании курса: %v", err)
 		http.Error(w, "Failed to create course", http.StatusInternalServerError)
 		return
 	}

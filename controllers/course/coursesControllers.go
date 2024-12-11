@@ -113,7 +113,6 @@ func CreateCourse(w http.ResponseWriter, r *http.Request) {
 
 	course.InstructorID = claims.UserID
 	if err := config.DB.Create(&course).Error; err != nil {
-		// Добавляем логирование ошибки базы данных
 		http.Error(w, "Failed to create course: "+err.Error(), http.StatusInternalServerError)
 		return
 	}

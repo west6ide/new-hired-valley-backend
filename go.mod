@@ -5,6 +5,7 @@ go 1.23.0
 require (
 	github.com/dgrijalva/jwt-go v3.2.0+incompatible
 	github.com/gorilla/sessions v1.4.0
+	github.com/lib/pq v1.10.9
 	golang.org/x/crypto v0.29.0
 	golang.org/x/oauth2 v0.24.0
 	google.golang.org/api v0.209.0

@@ -79,6 +79,7 @@ func CreateCourse(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Авторизация через токен
 	authHeader := r.Header.Get("Authorization")
 	if authHeader == "" {
 		http.Error(w, "Authorization header required", http.StatusUnauthorized)
@@ -104,6 +105,12 @@ func CreateCourse(w http.ResponseWriter, r *http.Request) {
 	var course courses.Course
 	if err := json.NewDecoder(r.Body).Decode(&course); err != nil {
 		http.Error(w, "Invalid input", http.StatusBadRequest)
+		return
+	}
+
+	// Убедимся, что `tags` заполнены
+	if len(course.Tags) == 0 {
+		http.Error(w, "Tags are required", http.StatusBadRequest)
 		return
 	}
 

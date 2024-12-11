@@ -79,6 +79,7 @@ func CreateCourse(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Проверяем авторизацию
 	authHeader := r.Header.Get("Authorization")
 	if authHeader == "" {
 		http.Error(w, "Authorization header required", http.StatusUnauthorized)
@@ -101,13 +102,23 @@ func CreateCourse(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Декодируем тело запроса
 	var course courses.Course
 	if err := json.NewDecoder(r.Body).Decode(&course); err != nil {
 		http.Error(w, "Invalid input", http.StatusBadRequest)
 		return
 	}
 
+	// Проверяем наличие тегов
+	if len(course.Tags) == 0 {
+		http.Error(w, "Tags are required", http.StatusBadRequest)
+		return
+	}
+
+	// Присваиваем ID инструктора из токена
 	course.InstructorID = claims.UserID
+
+	// Сохраняем курс в базе данных
 	if err := config.DB.Create(&course).Error; err != nil {
 		http.Error(w, "Failed to create course", http.StatusInternalServerError)
 		return

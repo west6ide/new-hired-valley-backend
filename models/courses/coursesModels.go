@@ -13,6 +13,7 @@ type Course struct {
 	Price        float64    `json:"price"`
 	InstructorID uint       `json:"instructor_id" gorm:"not null"`    // Внешний ключ на инструктора
 	Instructor   users.User `json:"-" gorm:"foreignKey:InstructorID"` // Связь с таблицей users
+	Tags         []string   `gorm:"type:text[]" json:"tags"`          // Теги для рекомендаций
 	CreatedAt    time.Time  `gorm:"default:current_timestamp"`
 	UpdatedAt    time.Time
 	DeletedAt    gorm.DeletedAt `gorm:"index"`

@@ -13,7 +13,7 @@ type Course struct {
 	Price        float64    `json:"price"`
 	InstructorID uint       `json:"instructor_id" gorm:"not null"`    // Внешний ключ на инструктора
 	Instructor   users.User `json:"-" gorm:"foreignKey:InstructorID"` // Связь с таблицей users
-	Tags         []string   `gorm:"type:text[]" json:"tags"`
+	Tags         []string   `gorm:"type:text[]" json:"tags"`          // Убедитесь, что это правильно настроено для PostgreSQL
 	CreatedAt    time.Time  `gorm:"default:current_timestamp"`
 	UpdatedAt    time.Time
 	DeletedAt    gorm.DeletedAt `gorm:"index"`

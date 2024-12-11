@@ -67,7 +67,6 @@ func GetCourseByID(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Course not found", http.StatusNotFound)
 		return
 	}
-
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(course)
 }
@@ -79,7 +78,6 @@ func CreateCourse(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Авторизация через токен
 	authHeader := r.Header.Get("Authorization")
 	if authHeader == "" {
 		http.Error(w, "Authorization header required", http.StatusUnauthorized)
@@ -108,7 +106,6 @@ func CreateCourse(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Убедимся, что `tags` заполнены
 	if len(course.Tags) == 0 {
 		http.Error(w, "Tags are required", http.StatusBadRequest)
 		return
@@ -116,7 +113,8 @@ func CreateCourse(w http.ResponseWriter, r *http.Request) {
 
 	course.InstructorID = claims.UserID
 	if err := config.DB.Create(&course).Error; err != nil {
-		http.Error(w, "Failed to create course", http.StatusInternalServerError)
+		// Добавляем логирование ошибки базы данных
+		http.Error(w, "Failed to create course: "+err.Error(), http.StatusInternalServerError)
 		return
 	}
 

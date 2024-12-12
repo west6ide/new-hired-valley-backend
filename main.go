@@ -87,8 +87,9 @@ func main() {
 	http.HandleFunc("/profile/update", authentication.UpdateProfile)
 	http.HandleFunc("/users/search", authentication.SearchUsers)
 
-	http.HandleFunc("/create/content", contentsControl.CreateContent)
-	http.HandleFunc("/get/personalized-content", contentsControl.GetPersonalizedContent)
+	http.HandleFunc("/upload/content", contentsControl.UploadContent)
+	http.HandleFunc("/list/content", contentsControl.ListContent)
+	http.HandleFunc("/get/content", contentsControl.GetContentByID)
 	http.HandleFunc("/delete/content", contentsControl.DeleteContent)
 
 	//courses endpoints

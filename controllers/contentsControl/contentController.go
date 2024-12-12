@@ -13,6 +13,7 @@ import (
 	"mime/multipart"
 	"net/http"
 	"strconv"
+	"strings"
 )
 
 // UploadContent - загрузка контента на YouTube и сохранение записи в базе данных
@@ -26,12 +27,15 @@ func UploadContent(w http.ResponseWriter, r *http.Request) {
 	title := r.FormValue("title")
 	description := r.FormValue("description")
 	category := r.FormValue("category")
-	tags := r.Form["tags"]
+	tagsStr := r.FormValue("tags")
 
 	if title == "" || description == "" || category == "" {
 		http.Error(w, "Missing required fields", http.StatusBadRequest)
 		return
 	}
+
+	// Преобразуем строку тегов в массив
+	tags := strings.Split(tagsStr, ",")
 
 	file, header, err := r.FormFile("video")
 	if err != nil {
@@ -50,14 +54,14 @@ func UploadContent(w http.ResponseWriter, r *http.Request) {
 		Title:       title,
 		Description: description,
 		Category:    category,
-		Tags:        tags,
+		Tags:        tags, // Сохраняем как массив
 		VideoLink:   fmt.Sprintf("https://www.youtube.com/watch?v=%s", videoID),
 		YouTubeID:   videoID,
 		AuthorID:    claims.UserID,
 	}
 
 	if err := config.DB.Create(&content).Error; err != nil {
-		http.Error(w, "Failed to save content", http.StatusInternalServerError)
+		http.Error(w, "Failed to save content: "+err.Error(), http.StatusInternalServerError)
 		return
 	}
 
@@ -100,14 +104,15 @@ func uploadVideoToYouTube(file multipart.File, fileName, accessToken, title, des
 // ListContent - получение списка контента
 func ListContent(w http.ResponseWriter, r *http.Request) {
 	category := r.URL.Query().Get("category")
-	tags := r.URL.Query()["tags"]
+	tagsStr := r.URL.Query().Get("tags")
 
 	query := config.DB.Model(&content.Content{})
 	if category != "" {
 		query = query.Where("category = ?", category)
 	}
-	if len(tags) > 0 {
-		query = query.Where("tags && ?", tags)
+	if tagsStr != "" {
+		tags := strings.Split(tagsStr, ",")
+		query = query.Where("tags @> ?", tags)
 	}
 
 	var contents []content.Content

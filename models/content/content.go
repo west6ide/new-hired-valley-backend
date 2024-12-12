@@ -1,6 +1,7 @@
 package content
 
 import (
+	"github.com/lib/pq"
 	"gorm.io/gorm"
 	"time"
 )
@@ -9,7 +10,7 @@ type Content struct {
 	ID          uint           `gorm:"primaryKey"`
 	Title       string         `json:"title" gorm:"not null"`
 	Description string         `json:"description" gorm:"type:text"`
-	Tags        []string       `json:"tags" gorm:"type:text[]"` // Используем массив строк
+	Tags        pq.StringArray `json:"tags" gorm:"type:text[]"` // Храним как массив строк
 	Category    string         `json:"category"`
 	VideoLink   string         `json:"video_link"`
 	YouTubeID   string         `json:"youtube_id"`

@@ -55,12 +55,18 @@ func UploadContent(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Создание записи контента
+	tagsJSON := r.FormValue("tags")
+	var tags []string
+	if err := json.Unmarshal([]byte(tagsJSON), &tags); err != nil {
+		http.Error(w, "Invalid tags format", http.StatusBadRequest)
+		return
+	}
+
 	content := content.Content{
 		Title:       input.Title,
 		Description: input.Description,
 		Category:    input.Category,
-		Tags:        input.Tags, // Массив тегов
+		Tags:        tags, // Сохраняем как массив строк
 		VideoLink:   fmt.Sprintf("https://www.youtube.com/watch?v=%s", videoID),
 		YouTubeID:   videoID,
 		AuthorID:    claims.UserID,

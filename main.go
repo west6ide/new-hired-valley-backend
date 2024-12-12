@@ -157,7 +157,7 @@ func main() {
 	})
 
 	// AI  endpoints
-	http.HandleFunc("", recommendations.GenerateRecommendationsHandler)
+	http.HandleFunc("/generate-recommendations", recommendations.GenerateRecommendationsHandler)
 	http.HandleFunc("/careersPlan", careers.GenerateCareerPlanHandler)
 
 	// Запускаем сервер

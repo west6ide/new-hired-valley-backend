@@ -13,7 +13,6 @@ import (
 	"mime/multipart"
 	"net/http"
 	"strconv"
-	"strings"
 )
 
 // UploadContent - загрузка контента на YouTube и сохранение записи в базе данных
@@ -113,15 +112,14 @@ func uploadVideoToYouTube(file multipart.File, fileName, accessToken, title, des
 // ListContent - получение списка контента
 func ListContent(w http.ResponseWriter, r *http.Request) {
 	category := r.URL.Query().Get("category")
-	tagsStr := r.URL.Query().Get("tags")
+	tags := r.URL.Query()["tags"]
 
 	query := config.DB.Model(&content.Content{})
 	if category != "" {
 		query = query.Where("category = ?", category)
 	}
-	if tagsStr != "" {
-		tags := strings.Split(tagsStr, ",")
-		query = query.Where("tags @> ?", tags)
+	if len(tags) > 0 {
+		query = query.Where("tags && ?", tags) // Используем массив тегов
 	}
 
 	var contents []content.Content

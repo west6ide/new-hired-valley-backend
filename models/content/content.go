@@ -9,7 +9,7 @@ type Content struct {
 	ID          uint           `gorm:"primaryKey"`
 	Title       string         `json:"title" gorm:"not null"`
 	Description string         `json:"description" gorm:"type:text"`
-	Tags        []string       `json:"tags" gorm:"type:text[]"`
+	Tags        string         `json:"tags" gorm:"type:text"`
 	Category    string         `json:"category"`
 	VideoLink   string         `json:"video_link"`
 	YouTubeID   string         `json:"youtube_id"`

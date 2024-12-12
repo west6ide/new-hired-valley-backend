@@ -1,42 +1,63 @@
 package contentsControl
 
 import (
+	"context"
 	"encoding/json"
+	"fmt"
+	"golang.org/x/oauth2"
+	"google.golang.org/api/option"
+	"google.golang.org/api/youtube/v3"
 	"hired-valley-backend/config"
 	"hired-valley-backend/controllers/authentication"
 	"hired-valley-backend/models/content"
-	"hired-valley-backend/models/users"
+	"mime/multipart"
 	"net/http"
 	"strconv"
 )
 
-func CreateContent(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodPost {
-		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
-		return
-	}
-
-	claims, err := authentication.ValidateToken(r)
+// UploadContent - загрузка контента на YouTube и сохранение записи в базе данных
+func UploadContent(w http.ResponseWriter, r *http.Request) {
+	claims, err := authentication.ValidateGoogleToken(r)
 	if err != nil {
 		http.Error(w, "Unauthorized: "+err.Error(), http.StatusUnauthorized)
 		return
 	}
 
-	var content content.Content
-	if err := json.NewDecoder(r.Body).Decode(&content); err != nil {
-		http.Error(w, "Invalid input", http.StatusBadRequest)
+	title := r.FormValue("title")
+	description := r.FormValue("description")
+	category := r.FormValue("category")
+	tags := r.Form["tags"]
+
+	if title == "" || description == "" || category == "" {
+		http.Error(w, "Missing required fields", http.StatusBadRequest)
 		return
 	}
 
-	if len(content.Tags) == 0 || content.VideoURL == "" {
-		http.Error(w, "Tags and Video URL are required", http.StatusBadRequest)
+	file, header, err := r.FormFile("video")
+	if err != nil {
+		http.Error(w, "Video file is required", http.StatusBadRequest)
+		return
+	}
+	defer file.Close()
+
+	videoID, err := uploadVideoToYouTube(file, header.Filename, claims.AccessToken, title, description)
+	if err != nil {
+		http.Error(w, "Failed to upload video to YouTube: "+err.Error(), http.StatusInternalServerError)
 		return
 	}
 
-	content.UserID = claims.UserID
+	content := content.Content{
+		Title:       title,
+		Description: description,
+		Category:    category,
+		Tags:        tags,
+		VideoLink:   fmt.Sprintf("https://www.youtube.com/watch?v=%s", videoID),
+		YouTubeID:   videoID,
+		AuthorID:    claims.UserID,
+	}
 
 	if err := config.DB.Create(&content).Error; err != nil {
-		http.Error(w, "Failed to create content", http.StatusInternalServerError)
+		http.Error(w, "Failed to save content", http.StatusInternalServerError)
 		return
 	}
 
@@ -44,37 +65,86 @@ func CreateContent(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(content)
 }
 
-func GetPersonalizedContent(w http.ResponseWriter, r *http.Request) {
-	claims, err := authentication.ValidateToken(r)
+// uploadVideoToYouTube - загрузка видео на YouTube
+func uploadVideoToYouTube(file multipart.File, fileName, accessToken, title, description string) (string, error) {
+	ctx := context.Background()
+
+	token := &oauth2.Token{AccessToken: accessToken}
+	tokenSource := authentication.GoogleOauthConfig.TokenSource(ctx, token)
+
+	service, err := youtube.NewService(ctx, option.WithTokenSource(tokenSource))
 	if err != nil {
-		http.Error(w, "Unauthorized: "+err.Error(), http.StatusUnauthorized)
-		return
+		return "", fmt.Errorf("failed to create YouTube service: %v", err)
 	}
 
-	// Получаем интересы пользователя
-	var user users.User
-	err = config.DB.Preload("Interests").First(&user, claims.UserID).Error
+	video := &youtube.Video{
+		Snippet: &youtube.VideoSnippet{
+			Title:       title,
+			Description: description,
+			CategoryId:  "22", // По умолчанию "People & Blogs"
+		},
+		Status: &youtube.VideoStatus{
+			PrivacyStatus: "unlisted", // Видео будет скрытым
+		},
+	}
+
+	call := service.Videos.Insert([]string{"snippet", "status"}, video)
+	response, err := call.Media(file).Do()
 	if err != nil {
-		http.Error(w, "User not found", http.StatusNotFound)
-		return
+		return "", fmt.Errorf("failed to upload video: %v", err)
 	}
 
-	interestTags := []string{}
-	for _, interest := range user.Interests {
-		interestTags = append(interestTags, interest.Name)
+	return response.Id, nil
+}
+
+// ListContent - получение списка контента
+func ListContent(w http.ResponseWriter, r *http.Request) {
+	category := r.URL.Query().Get("category")
+	tags := r.URL.Query()["tags"]
+
+	query := config.DB.Model(&content.Content{})
+	if category != "" {
+		query = query.Where("category = ?", category)
+	}
+	if len(tags) > 0 {
+		query = query.Where("tags && ?", tags)
 	}
 
-	// Поиск контента по интересам
-	var contentList []content.Content
-	if err := config.DB.Where("tags && ?", interestTags).Find(&contentList).Error; err != nil {
+	var contents []content.Content
+	if err := query.Find(&contents).Error; err != nil {
 		http.Error(w, "Failed to fetch content", http.StatusInternalServerError)
 		return
 	}
 
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(contentList)
+	json.NewEncoder(w).Encode(contents)
 }
 
+// GetContentByID - получение контента по ID
+func GetContentByID(w http.ResponseWriter, r *http.Request) {
+	idStr := r.URL.Query().Get("id")
+	if idStr == "" {
+		http.Error(w, "Content ID is required", http.StatusBadRequest)
+		return
+	}
+
+	id, err := strconv.Atoi(idStr)
+	if err != nil {
+		http.Error(w, "Invalid Content ID", http.StatusBadRequest)
+		return
+	}
+
+	var content content.Content
+	if err := config.DB.First(&content, id).Error; err != nil {
+		http.Error(w, "Content not found", http.StatusNotFound)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(content)
+}
+
+// DeleteContent - удаление контента
 func DeleteContent(w http.ResponseWriter, r *http.Request) {
 	claims, err := authentication.ValidateToken(r)
 	if err != nil {
@@ -82,20 +152,25 @@ func DeleteContent(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	contentIDStr := r.URL.Query().Get("id")
-	contentID, err := strconv.Atoi(contentIDStr)
+	idStr := r.URL.Query().Get("id")
+	if idStr == "" {
+		http.Error(w, "Content ID is required", http.StatusBadRequest)
+		return
+	}
+
+	id, err := strconv.Atoi(idStr)
 	if err != nil {
-		http.Error(w, "Invalid content ID", http.StatusBadRequest)
+		http.Error(w, "Invalid Content ID", http.StatusBadRequest)
 		return
 	}
 
 	var content content.Content
-	if err := config.DB.First(&content, contentID).Error; err != nil {
+	if err := config.DB.First(&content, id).Error; err != nil {
 		http.Error(w, "Content not found", http.StatusNotFound)
 		return
 	}
 
-	if content.UserID != claims.UserID {
+	if content.AuthorID != claims.UserID {
 		http.Error(w, "Permission denied", http.StatusForbidden)
 		return
 	}

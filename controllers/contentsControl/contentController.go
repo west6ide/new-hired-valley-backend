@@ -24,19 +24,25 @@ func UploadContent(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	title := r.FormValue("title")
-	description := r.FormValue("description")
-	category := r.FormValue("category")
-	tagsStr := r.FormValue("tags")
+	// Декодируем JSON-запрос
+	var input struct {
+		Title       string   `json:"title"`
+		Description string   `json:"description"`
+		Category    string   `json:"category"`
+		Tags        []string `json:"tags"`
+	}
 
-	if title == "" || description == "" || category == "" {
+	if err := json.NewDecoder(r.Body).Decode(&input); err != nil {
+		http.Error(w, "Invalid input: "+err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	if input.Title == "" || input.Description == "" || input.Category == "" {
 		http.Error(w, "Missing required fields", http.StatusBadRequest)
 		return
 	}
 
-	// Преобразуем строку тегов в массив
-	tags := strings.Split(tagsStr, ",")
-
+	// Получение файла из form-data
 	file, header, err := r.FormFile("video")
 	if err != nil {
 		http.Error(w, "Video file is required", http.StatusBadRequest)
@@ -44,17 +50,17 @@ func UploadContent(w http.ResponseWriter, r *http.Request) {
 	}
 	defer file.Close()
 
-	videoID, err := uploadVideoToYouTube(file, header.Filename, claims.AccessToken, title, description)
+	videoID, err := uploadVideoToYouTube(file, header.Filename, claims.AccessToken, input.Title, input.Description)
 	if err != nil {
 		http.Error(w, "Failed to upload video to YouTube: "+err.Error(), http.StatusInternalServerError)
 		return
 	}
 
 	content := content.Content{
-		Title:       title,
-		Description: description,
-		Category:    category,
-		Tags:        tags, // Сохраняем как массив
+		Title:       input.Title,
+		Description: input.Description,
+		Category:    input.Category,
+		Tags:        input.Tags,
 		VideoLink:   fmt.Sprintf("https://www.youtube.com/watch?v=%s", videoID),
 		YouTubeID:   videoID,
 		AuthorID:    claims.UserID,

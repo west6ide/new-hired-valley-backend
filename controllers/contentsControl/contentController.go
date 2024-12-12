@@ -13,34 +13,36 @@ import (
 	"mime/multipart"
 	"net/http"
 	"strconv"
+	"strings"
 )
 
 // UploadContent - загрузка контента на YouTube и сохранение записи в базе данных
 func UploadContent(w http.ResponseWriter, r *http.Request) {
+	// Проверка авторизации
 	claims, err := authentication.ValidateGoogleToken(r)
 	if err != nil {
 		http.Error(w, "Unauthorized: "+err.Error(), http.StatusUnauthorized)
 		return
 	}
 
-	// Чтение JSON из запроса
-	var input struct {
-		Title       string   `json:"title"`
-		Description string   `json:"description"`
-		Category    string   `json:"category"`
-		Tags        []string `json:"tags"`
-	}
-	if err := json.NewDecoder(r.Body).Decode(&input); err != nil {
-		http.Error(w, "Invalid JSON input: "+err.Error(), http.StatusBadRequest)
-		return
-	}
+	// Получение текстовых данных из form-data
+	title := r.FormValue("title")
+	description := r.FormValue("description")
+	category := r.FormValue("category")
+	tagsStr := r.FormValue("tags") // Теги передаются через запятую, например: "tag1,tag2"
 
-	if input.Title == "" || input.Description == "" || input.Category == "" {
+	if title == "" || description == "" || category == "" {
 		http.Error(w, "Missing required fields (title, description, category)", http.StatusBadRequest)
 		return
 	}
 
-	// Получение видео из form-data
+	// Парсинг тегов в массив строк
+	tags := strings.Split(tagsStr, ",")
+	for i := range tags {
+		tags[i] = strings.TrimSpace(tags[i])
+	}
+
+	// Получение файла видео
 	file, header, err := r.FormFile("video")
 	if err != nil {
 		http.Error(w, "Video file is required", http.StatusBadRequest)
@@ -49,36 +51,30 @@ func UploadContent(w http.ResponseWriter, r *http.Request) {
 	defer file.Close()
 
 	// Загрузка видео на YouTube
-	videoID, err := uploadVideoToYouTube(file, header.Filename, claims.AccessToken, input.Title, input.Description)
+	videoID, err := uploadVideoToYouTube(file, header.Filename, claims.AccessToken, title, description)
 	if err != nil {
 		http.Error(w, "Failed to upload video to YouTube: "+err.Error(), http.StatusInternalServerError)
 		return
 	}
 
-	tagsJSON := r.FormValue("tags")
-	var tags []string
-	if err := json.Unmarshal([]byte(tagsJSON), &tags); err != nil {
-		http.Error(w, "Invalid tags format", http.StatusBadRequest)
-		return
-	}
-
+	// Создание записи контента
 	content := content.Content{
-		Title:       input.Title,
-		Description: input.Description,
-		Category:    input.Category,
-		Tags:        tags, // Сохраняем как массив строк
+		Title:       title,
+		Description: description,
+		Category:    category,
+		Tags:        tags,
 		VideoLink:   fmt.Sprintf("https://www.youtube.com/watch?v=%s", videoID),
 		YouTubeID:   videoID,
 		AuthorID:    claims.UserID,
 	}
 
-	// Сохранение в базу данных
+	// Сохранение записи в базе данных
 	if err := config.DB.Create(&content).Error; err != nil {
 		http.Error(w, "Failed to save content: "+err.Error(), http.StatusInternalServerError)
 		return
 	}
 
-	// Возвращаем успешный ответ
+	// Успешный ответ
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(content)
 }

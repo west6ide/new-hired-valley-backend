@@ -5,10 +5,12 @@ import (
 	"hired-valley-backend/config"
 	"hired-valley-backend/controllers/authentication"
 	"hired-valley-backend/controllers/careers"
+	"hired-valley-backend/controllers/contentsControl"
 	"hired-valley-backend/controllers/course"
 	"hired-valley-backend/controllers/recommendations"
 	"hired-valley-backend/controllers/stories"
 	"hired-valley-backend/models/career"
+	"hired-valley-backend/models/content"
 	"hired-valley-backend/models/courses"
 	"hired-valley-backend/models/courses/videos"
 	"hired-valley-backend/models/recommend"
@@ -47,6 +49,7 @@ func main() {
 		&story.Notification{},
 		&recommend.Recommendation{},
 		&career.PlanCareer{},
+		&content.Content{},
 	)
 	if err != nil {
 		log.Fatalf("Ошибка миграции базы данных: %v", err)
@@ -83,6 +86,10 @@ func main() {
 	//users profile endpoints
 	http.HandleFunc("/profile/update", authentication.UpdateProfile)
 	http.HandleFunc("/users/search", authentication.SearchUsers)
+
+	http.HandleFunc("/create/content", contentsControl.CreateContent)
+	http.HandleFunc("/get/personalized-content", contentsControl.GetPersonalizedContent)
+	http.HandleFunc("/delete/content", contentsControl.DeleteContent)
 
 	//courses endpoints
 	http.HandleFunc("/list/courses", course.ListCourses)
@@ -150,7 +157,7 @@ func main() {
 	})
 
 	// AI  endpoints
-	http.HandleFunc("/generate-recommendations", recommendations.GenerateRecommendationsHandler)
+	http.HandleFunc("", recommendations.GenerateRecommendationsHandler)
 	http.HandleFunc("/careersPlan", careers.GenerateCareerPlanHandler)
 
 	// Запускаем сервер

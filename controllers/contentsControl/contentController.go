@@ -18,14 +18,14 @@ import (
 
 // UploadContent - загрузка контента на YouTube и сохранение записи в базе данных
 func UploadContent(w http.ResponseWriter, r *http.Request) {
-	// Проверка авторизации
+	// Проверяем Google OAuth токен
 	claims, err := authentication.ValidateGoogleToken(r)
 	if err != nil {
 		http.Error(w, "Unauthorized: "+err.Error(), http.StatusUnauthorized)
 		return
 	}
 
-	// Получение текстовых данных из form-data
+	// Получаем текстовые данные из form-data
 	title := r.FormValue("title")
 	description := r.FormValue("description")
 	category := r.FormValue("category")
@@ -42,7 +42,7 @@ func UploadContent(w http.ResponseWriter, r *http.Request) {
 		tags[i] = strings.TrimSpace(tags[i])
 	}
 
-	// Получение файла видео
+	// Получаем файл видео
 	file, header, err := r.FormFile("video")
 	if err != nil {
 		http.Error(w, "Video file is required", http.StatusBadRequest)
@@ -51,30 +51,30 @@ func UploadContent(w http.ResponseWriter, r *http.Request) {
 	defer file.Close()
 
 	// Загрузка видео на YouTube
-	videoID, err := uploadVideoToYouTube(file, header.Filename, claims.AccessToken, title, description)
+	videoID, err := uploadVideoToYouTube(file, header.Filename, claims.AccessToken)
 	if err != nil {
 		http.Error(w, "Failed to upload video to YouTube: "+err.Error(), http.StatusInternalServerError)
 		return
 	}
 
-	// Проверяем, что videoID получен
+	// Проверяем, что videoID не пустой
 	if videoID == "" {
 		http.Error(w, "Failed to get video ID from YouTube", http.StatusInternalServerError)
 		return
 	}
 
-	// Создание записи контента
+	// Создаем запись контента
 	content := content.Content{
 		Title:       title,
 		Description: description,
 		Category:    category,
 		Tags:        tags,
-		VideoLink:   fmt.Sprintf("https://www.youtube.com/watch?v=%s", videoID), // Убедитесь, что это поле не пустое
+		VideoLink:   fmt.Sprintf("https://www.youtube.com/watch?v=%s", videoID),
 		YouTubeID:   videoID,
 		AuthorID:    claims.UserID,
 	}
 
-	// Сохранение записи в базе данных
+	// Сохраняем запись в базе данных
 	if err := config.DB.Create(&content).Error; err != nil {
 		http.Error(w, "Failed to save content: "+err.Error(), http.StatusInternalServerError)
 		return
@@ -85,35 +85,42 @@ func UploadContent(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(content)
 }
 
-// uploadVideoToYouTube - загрузка видео на YouTube
-func uploadVideoToYouTube(file multipart.File, fileName, accessToken, title, description string) (string, error) {
+func uploadVideoToYouTube(file multipart.File, fileName string, accessToken string) (string, error) {
 	ctx := context.Background()
 
-	token := &oauth2.Token{AccessToken: accessToken}
+	// Создаем токен OAuth вручную
+	token := &oauth2.Token{
+		AccessToken: accessToken,
+	}
+
+	// Создаем источник токена
 	tokenSource := authentication.GoogleOauthConfig.TokenSource(ctx, token)
 
+	// Создаем YouTube сервис
 	service, err := youtube.NewService(ctx, option.WithTokenSource(tokenSource))
 	if err != nil {
 		return "", fmt.Errorf("failed to create YouTube service: %v", err)
 	}
 
+	// Подготавливаем метаданные видео
 	video := &youtube.Video{
 		Snippet: &youtube.VideoSnippet{
-			Title:       title,
-			Description: description,
-			CategoryId:  "22", // По умолчанию "People & Blogs"
+			Title:       fileName,
+			Description: "Uploaded via Hired Valley platform",
 		},
 		Status: &youtube.VideoStatus{
-			PrivacyStatus: "unlisted", // Видео будет скрытым
+			PrivacyStatus: "unlisted",
 		},
 	}
 
+	// Загружаем видео
 	call := service.Videos.Insert([]string{"snippet", "status"}, video)
 	response, err := call.Media(file).Do()
 	if err != nil {
 		return "", fmt.Errorf("failed to upload video: %v", err)
 	}
 
+	// Возвращаем ID видео
 	return response.Id, nil
 }
 

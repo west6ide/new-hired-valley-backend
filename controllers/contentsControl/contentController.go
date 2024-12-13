@@ -51,15 +51,9 @@ func UploadContent(w http.ResponseWriter, r *http.Request) {
 	defer file.Close()
 
 	// Загрузка видео на YouTube
-	videoID, err := uploadVideoToYouTube(file, header.Filename, claims.AccessToken)
-	if err != nil {
-		http.Error(w, "Failed to upload video to YouTube: "+err.Error(), http.StatusInternalServerError)
-		return
-	}
-
-	// Проверяем, что videoID не пустой
-	if videoID == "" {
-		http.Error(w, "Failed to get video ID from YouTube", http.StatusInternalServerError)
+	videoID, err := uploadVideoToYouTube(file, header.Filename, claims.AccessToken, title, description)
+	if err != nil || videoID == "" {
+		http.Error(w, "Failed to upload video to YouTube or received empty video ID", http.StatusInternalServerError)
 		return
 	}
 
@@ -85,7 +79,7 @@ func UploadContent(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(content)
 }
 
-func uploadVideoToYouTube(file multipart.File, fileName string, accessToken string) (string, error) {
+func uploadVideoToYouTube(file multipart.File, fileName string, accessToken string, title string, description string) (string, error) {
 	ctx := context.Background()
 
 	// Создаем токен OAuth вручную
@@ -105,8 +99,8 @@ func uploadVideoToYouTube(file multipart.File, fileName string, accessToken stri
 	// Подготавливаем метаданные видео
 	video := &youtube.Video{
 		Snippet: &youtube.VideoSnippet{
-			Title:       fileName,
-			Description: "Uploaded via Hired Valley platform",
+			Title:       title,
+			Description: description,
 		},
 		Status: &youtube.VideoStatus{
 			PrivacyStatus: "unlisted",

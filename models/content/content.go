@@ -12,7 +12,7 @@ type Content struct {
 	Description string         `json:"description" gorm:"type:text"`
 	Tags        pq.StringArray `json:"tags" gorm:"type:text[]"` // Храним как массив строк
 	Category    string         `json:"category"`
-	VideoLink   string         `json:"video_link"`
+	VideoLink   string         `json:"video_link" gorm:"column:video_url;not null"`
 	YouTubeID   string         `json:"youtube_id"`
 	AuthorID    uint           `json:"author_id"`
 	CreatedAt   time.Time      `json:"created_at"`

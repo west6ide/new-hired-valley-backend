@@ -52,8 +52,14 @@ func UploadContent(w http.ResponseWriter, r *http.Request) {
 
 	// Загрузка видео на YouTube
 	videoID, err := uploadVideoToYouTube(file, header.Filename, claims.AccessToken, title, description)
-	if err != nil || videoID == "" {
-		http.Error(w, "Failed to upload video to YouTube or received empty video ID", http.StatusInternalServerError)
+	if err != nil {
+		http.Error(w, "Failed to upload video to YouTube: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	// Проверяем, что videoID не пустой
+	if videoID == "" {
+		http.Error(w, "YouTube API returned an empty video ID", http.StatusInternalServerError)
 		return
 	}
 

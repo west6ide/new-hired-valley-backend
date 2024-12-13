@@ -57,13 +57,19 @@ func UploadContent(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Проверяем, что videoID получен
+	if videoID == "" {
+		http.Error(w, "Failed to get video ID from YouTube", http.StatusInternalServerError)
+		return
+	}
+
 	// Создание записи контента
 	content := content.Content{
 		Title:       title,
 		Description: description,
 		Category:    category,
 		Tags:        tags,
-		VideoLink:   fmt.Sprintf("https://www.youtube.com/watch?v=%s", videoID),
+		VideoLink:   fmt.Sprintf("https://www.youtube.com/watch?v=%s", videoID), // Убедитесь, что это поле не пустое
 		YouTubeID:   videoID,
 		AuthorID:    claims.UserID,
 	}

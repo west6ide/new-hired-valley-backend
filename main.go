@@ -99,6 +99,13 @@ func main() {
 	http.HandleFunc("/update/courses", course.UpdateCourse)
 	http.HandleFunc("/delete/courses", course.DeleteCourse)
 
+	//coursesGoogle endpoints
+	http.HandleFunc("/list/google/courses", course.ListCoursesGoogle)
+	http.HandleFunc("/create/google/courses", course.CreateCourseGoogle)
+	http.HandleFunc("/get/google/courses", course.GetCourseByIDGoogle)
+	http.HandleFunc("/update/google/courses", course.UpdateCourseGoogle)
+	http.HandleFunc("/delete/google/courses", course.DeleteCourseGoogle)
+
 	//lessons endpoints
 	http.HandleFunc("/list/lessons", course.ListLessons)
 	http.HandleFunc("/create/lessons", course.CreateLesson)

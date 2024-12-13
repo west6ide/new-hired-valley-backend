@@ -2,37 +2,46 @@ package course
 
 import (
 	"encoding/json"
-	"github.com/dgrijalva/jwt-go"
 	"hired-valley-backend/config"
 	"hired-valley-backend/controllers/authentication"
 	"hired-valley-backend/models/courses"
+	"hired-valley-backend/models/users"
 	"net/http"
 	"strconv"
-	"strings"
 )
 
+// Проверка роли пользователя
+func isMentor(userID uint) (bool, error) {
+	var user users.User
+	if err := config.DB.First(&user, userID).Error; err != nil {
+		return false, err
+	}
+	return user.Role == "mentor", nil
+}
+
 // ListCourses - получение всех курсов менторов (фильтр по instructor_id)
-func ListCourses(w http.ResponseWriter, r *http.Request) {
+func ListCoursesGoogle(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
 
-	// Получение параметра instructor_id из запроса
-	instructorIDStr := r.URL.Query().Get("instructor_id")
-	if instructorIDStr == "" {
-		http.Error(w, "Instructor ID is required", http.StatusBadRequest)
+	// Проверяем Google OAuth токен
+	claims, err := authentication.ValidateGoogleToken(r)
+	if err != nil {
+		http.Error(w, "Unauthorized: "+err.Error(), http.StatusUnauthorized)
 		return
 	}
 
-	instructorID, err := strconv.Atoi(instructorIDStr)
-	if err != nil || instructorID <= 0 {
-		http.Error(w, "Invalid Instructor ID", http.StatusBadRequest)
+	// Проверка роли пользователя
+	isMentor, err := isMentor(claims.UserID)
+	if err != nil || !isMentor {
+		http.Error(w, "Permission denied", http.StatusForbidden)
 		return
 	}
 
 	var courses []courses.Course
-	if err := config.DB.Where("instructor_id = ?", instructorID).Find(&courses).Error; err != nil {
+	if err := config.DB.Where("instructor_id = ?", claims.UserID).Find(&courses).Error; err != nil {
 		http.Error(w, "Failed to list courses", http.StatusInternalServerError)
 		return
 	}
@@ -42,9 +51,16 @@ func ListCourses(w http.ResponseWriter, r *http.Request) {
 }
 
 // GetCourseByID - получение курса по ID
-func GetCourseByID(w http.ResponseWriter, r *http.Request) {
+func GetCourseByIDGoogle(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	// Проверяем Google OAuth токен
+	claims, err := authentication.ValidateGoogleToken(r)
+	if err != nil {
+		http.Error(w, "Unauthorized: "+err.Error(), http.StatusUnauthorized)
 		return
 	}
 
@@ -66,35 +82,33 @@ func GetCourseByID(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Course not found", http.StatusNotFound)
 		return
 	}
+
+	if course.InstructorID != claims.UserID {
+		http.Error(w, "Permission denied", http.StatusForbidden)
+		return
+	}
+
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(course)
 }
 
 // CreateCourse - создание нового курса
-func CreateCourse(w http.ResponseWriter, r *http.Request) {
+func CreateCourseGoogle(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
 
-	authHeader := r.Header.Get("Authorization")
-	if authHeader == "" {
-		http.Error(w, "Authorization header required", http.StatusUnauthorized)
+	// Проверяем Google OAuth токен
+	claims, err := authentication.ValidateGoogleToken(r)
+	if err != nil {
+		http.Error(w, "Unauthorized: "+err.Error(), http.StatusUnauthorized)
 		return
 	}
 
-	tokenString := strings.TrimPrefix(authHeader, "Bearer ")
-	claims := &authentication.Claims{}
-	token, err := jwt.ParseWithClaims(tokenString, claims, func(token *jwt.Token) (interface{}, error) {
-		return []byte(authentication.JwtKey), nil
-	})
-
-	if err != nil || !token.Valid {
-		http.Error(w, "Invalid token", http.StatusUnauthorized)
-		return
-	}
-
-	if claims.Role != "mentor" {
+	// Проверка роли пользователя
+	isMentor, err := isMentor(claims.UserID)
+	if err != nil || !isMentor {
 		http.Error(w, "Only mentors can create courses", http.StatusForbidden)
 		return
 	}
@@ -121,9 +135,16 @@ func CreateCourse(w http.ResponseWriter, r *http.Request) {
 }
 
 // UpdateCourse - обновление курса
-func UpdateCourse(w http.ResponseWriter, r *http.Request) {
+func UpdateCourseGoogle(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPut {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	// Проверяем Google OAuth токен
+	claims, err := authentication.ValidateGoogleToken(r)
+	if err != nil {
+		http.Error(w, "Unauthorized: "+err.Error(), http.StatusUnauthorized)
 		return
 	}
 
@@ -140,30 +161,13 @@ func UpdateCourse(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	authHeader := r.Header.Get("Authorization")
-	if authHeader == "" {
-		http.Error(w, "Authorization header required", http.StatusUnauthorized)
-		return
-	}
-
-	tokenString := strings.TrimPrefix(authHeader, "Bearer ")
-	claims := &authentication.Claims{}
-	token, err := jwt.ParseWithClaims(tokenString, claims, func(token *jwt.Token) (interface{}, error) {
-		return []byte(authentication.JwtKey), nil
-	})
-
-	if err != nil || !token.Valid {
-		http.Error(w, "Invalid token", http.StatusUnauthorized)
-		return
-	}
-
 	var course courses.Course
 	if err := config.DB.First(&course, id).Error; err != nil {
 		http.Error(w, "Course not found", http.StatusNotFound)
 		return
 	}
 
-	if claims.Role != "mentor" || course.InstructorID != claims.UserID {
+	if course.InstructorID != claims.UserID {
 		http.Error(w, "Permission denied", http.StatusForbidden)
 		return
 	}
@@ -197,9 +201,16 @@ func UpdateCourse(w http.ResponseWriter, r *http.Request) {
 }
 
 // DeleteCourse - удаление курса
-func DeleteCourse(w http.ResponseWriter, r *http.Request) {
+func DeleteCourseGoogle(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodDelete {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	// Проверяем Google OAuth токен
+	claims, err := authentication.ValidateGoogleToken(r)
+	if err != nil {
+		http.Error(w, "Unauthorized: "+err.Error(), http.StatusUnauthorized)
 		return
 	}
 
@@ -216,30 +227,13 @@ func DeleteCourse(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	authHeader := r.Header.Get("Authorization")
-	if authHeader == "" {
-		http.Error(w, "Authorization header required", http.StatusUnauthorized)
-		return
-	}
-
-	tokenString := strings.TrimPrefix(authHeader, "Bearer ")
-	claims := &authentication.Claims{}
-	token, err := jwt.ParseWithClaims(tokenString, claims, func(token *jwt.Token) (interface{}, error) {
-		return []byte(authentication.JwtKey), nil
-	})
-
-	if err != nil || !token.Valid {
-		http.Error(w, "Invalid token", http.StatusUnauthorized)
-		return
-	}
-
 	var course courses.Course
 	if err := config.DB.First(&course, id).Error; err != nil {
 		http.Error(w, "Course not found", http.StatusNotFound)
 		return
 	}
 
-	if claims.Role != "mentor" || course.InstructorID != claims.UserID {
+	if course.InstructorID != claims.UserID {
 		http.Error(w, "Permission denied", http.StatusForbidden)
 		return
 	}

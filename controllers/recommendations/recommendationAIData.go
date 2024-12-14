@@ -56,6 +56,7 @@ func PersonalizedRecommendationsHandler(w http.ResponseWriter, r *http.Request) 
 	}
 
 	aiRequestBody := map[string]interface{}{
+		"model": "gpt-4-turbo", // Добавьте подходящую модель
 		"profile": map[string]interface{}{
 			"industry":  user.Industry,
 			"skills":    user.Skills,

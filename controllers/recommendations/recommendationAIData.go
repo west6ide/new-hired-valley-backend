@@ -90,6 +90,8 @@ func callAIMLAPI(apiKey string, requestBody map[string]interface{}) (map[string]
 	url := "https://api.aimlapi.com/recommendations"
 	requestJSON, _ := json.Marshal(requestBody)
 
+	fmt.Printf("Request JSON: %s\n", string(requestJSON)) // Отладка
+
 	req, err := http.NewRequest("POST", url, strings.NewReader(string(requestJSON)))
 	if err != nil {
 		return nil, fmt.Errorf("failed to create request: %v", err)
@@ -103,6 +105,12 @@ func callAIMLAPI(apiKey string, requestBody map[string]interface{}) (map[string]
 		return nil, fmt.Errorf("failed to make request: %v", err)
 	}
 	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		var errorResponse map[string]interface{}
+		json.NewDecoder(resp.Body).Decode(&errorResponse)
+		return nil, fmt.Errorf("API error: %v, Status: %d", errorResponse, resp.StatusCode)
+	}
 
 	var response map[string]interface{}
 	if err := json.NewDecoder(resp.Body).Decode(&response); err != nil {

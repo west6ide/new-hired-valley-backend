@@ -90,7 +90,7 @@ func callAIMLAPI(apiKey string, requestBody map[string]interface{}) (map[string]
 	url := "https://api.aimlapi.com/chat/completions"
 	requestJSON, _ := json.Marshal(requestBody)
 
-	fmt.Printf("Request JSON: %s\n", string(requestJSON)) // Отладка
+	fmt.Printf("Request JSON: %s\n", string(requestJSON)) // Для отладки
 
 	req, err := http.NewRequest("POST", url, strings.NewReader(string(requestJSON)))
 	if err != nil {
@@ -109,6 +109,7 @@ func callAIMLAPI(apiKey string, requestBody map[string]interface{}) (map[string]
 	if resp.StatusCode != http.StatusOK {
 		var errorResponse map[string]interface{}
 		json.NewDecoder(resp.Body).Decode(&errorResponse)
+		fmt.Printf("Error Response: %+v\n", errorResponse) // Для отладки
 		return nil, fmt.Errorf("API error: %v, Status: %d", errorResponse, resp.StatusCode)
 	}
 

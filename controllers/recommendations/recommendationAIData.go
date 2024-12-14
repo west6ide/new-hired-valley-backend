@@ -56,7 +56,7 @@ func PersonalizedRecommendationsHandler(w http.ResponseWriter, r *http.Request) 
 	}
 
 	aiRequestBody := map[string]interface{}{
-		"model": "gpt-4-turbo", // Добавьте подходящую модель
+		"model": "gpt-4-turbo", // Укажите подходящую модель
 		"profile": map[string]interface{}{
 			"industry":  user.Industry,
 			"skills":    user.Skills,
@@ -89,9 +89,14 @@ func PersonalizedRecommendationsHandler(w http.ResponseWriter, r *http.Request) 
 // callAIMLAPI - отправка запроса к AIML API
 func callAIMLAPI(apiKey string, requestBody map[string]interface{}) (map[string]interface{}, error) {
 	url := "https://api.aimlapi.com/chat/completions"
-	requestJSON, _ := json.Marshal(requestBody)
 
-	fmt.Printf("Request JSON: %s\n", string(requestJSON)) // Для отладки
+	// Добавляем обязательное поле `messages`
+	requestBody["messages"] = []map[string]string{
+		{"role": "system", "content": "You are a recommendation assistant."},
+		{"role": "user", "content": "Provide recommendations based on the user's profile and preferences."},
+	}
+
+	requestJSON, _ := json.Marshal(requestBody)
 
 	req, err := http.NewRequest("POST", url, strings.NewReader(string(requestJSON)))
 	if err != nil {
@@ -110,7 +115,7 @@ func callAIMLAPI(apiKey string, requestBody map[string]interface{}) (map[string]
 	if resp.StatusCode != http.StatusOK {
 		var errorResponse map[string]interface{}
 		json.NewDecoder(resp.Body).Decode(&errorResponse)
-		fmt.Printf("Error Response: %+v\n", errorResponse) // Для отладки
+		fmt.Printf("Error Response: %+v\n", errorResponse)
 		return nil, fmt.Errorf("API error: %v, Status: %d", errorResponse, resp.StatusCode)
 	}
 

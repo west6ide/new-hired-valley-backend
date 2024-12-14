@@ -11,6 +11,8 @@ import (
 	"net/http"
 	"os"
 	"strings"
+
+	"github.com/lib/pq"
 )
 
 // PersonalizedRecommendationsHandler - обработчик для персонализированных рекомендаций
@@ -40,14 +42,14 @@ func PersonalizedRecommendationsHandler(w http.ResponseWriter, r *http.Request) 
 
 	// Ищем курсы, соответствующие интересам пользователя
 	var matchedCourses []courses.Course
-	if err := config.DB.Where("tags && ?", interests).Find(&matchedCourses).Error; err != nil {
+	if err := config.DB.Where("tags && ?", pq.Array(interests)).Find(&matchedCourses).Error; err != nil {
 		http.Error(w, "Failed to fetch courses", http.StatusInternalServerError)
 		return
 	}
 
 	// Ищем контент, соответствующий интересам пользователя
 	var matchedContent []content.Content
-	if err := config.DB.Where("tags && ?", interests).Find(&matchedContent).Error; err != nil {
+	if err := config.DB.Where("tags && ?", pq.Array(interests)).Find(&matchedContent).Error; err != nil {
 		http.Error(w, "Failed to fetch content", http.StatusInternalServerError)
 		return
 	}
@@ -76,6 +78,7 @@ func PersonalizedRecommendationsHandler(w http.ResponseWriter, r *http.Request) 
 
 	// Формируем итоговый ответ
 	response := map[string]interface{}{
+		"status":               "success",
 		"personalized_courses": matchedCourses,
 		"personalized_content": matchedContent,
 		"ai_suggestions":       aiResponse,
@@ -89,13 +92,9 @@ func PersonalizedRecommendationsHandler(w http.ResponseWriter, r *http.Request) 
 func callAIMLAPI(apiKey string, requestBody map[string]interface{}) (map[string]interface{}, error) {
 	url := "https://api.aimlapi.com/chat/completions"
 
-	// Добавляем обязательное поле `messages`
-	requestBody["messages"] = []map[string]string{
-		{"role": "system", "content": "You are a recommendation assistant."},
-		{"role": "user", "content": "Provide recommendations based on the user's profile and preferences."},
-	}
-
+	// Отладочная информация для запроса
 	requestJSON, _ := json.Marshal(requestBody)
+	fmt.Printf("Request Body: %s\n", string(requestJSON))
 
 	req, err := http.NewRequest("POST", url, strings.NewReader(string(requestJSON)))
 	if err != nil {
@@ -126,6 +125,7 @@ func callAIMLAPI(apiKey string, requestBody map[string]interface{}) (map[string]
 	return response, nil
 }
 
+// convertSkillsToStrings - преобразование навыков в []string
 func convertSkillsToStrings(skills []users.Skill) []string {
 	var skillStrings []string
 	for _, skill := range skills {
@@ -134,6 +134,7 @@ func convertSkillsToStrings(skills []users.Skill) []string {
 	return skillStrings
 }
 
+// convertInterestsToStrings - преобразование интересов в []string
 func convertInterestsToStrings(interests []users.Interest) []string {
 	var interestStrings []string
 	for _, interest := range interests {

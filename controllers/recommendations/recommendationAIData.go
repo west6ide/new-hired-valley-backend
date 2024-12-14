@@ -87,7 +87,7 @@ func PersonalizedRecommendationsHandler(w http.ResponseWriter, r *http.Request) 
 
 // callAIMLAPI - отправка запроса к AIML API
 func callAIMLAPI(apiKey string, requestBody map[string]interface{}) (map[string]interface{}, error) {
-	url := "https://api.aimlapi.com/recommendations"
+	url := "https://api.aimlapi.com/chat/completions"
 	requestJSON, _ := json.Marshal(requestBody)
 
 	fmt.Printf("Request JSON: %s\n", string(requestJSON)) // Отладка

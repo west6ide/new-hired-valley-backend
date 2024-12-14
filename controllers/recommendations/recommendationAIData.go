@@ -21,7 +21,7 @@ func PersonalizedRecommendationsHandler(w http.ResponseWriter, r *http.Request) 
 	}
 
 	// Проверяем Google OAuth токен
-	claims, err := authentication.ValidateGoogleToken(r)
+	claims, err := authentication.ValidateToken(r)
 	if err != nil {
 		http.Error(w, "Unauthorized: "+err.Error(), http.StatusUnauthorized)
 		return

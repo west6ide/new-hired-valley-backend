@@ -189,6 +189,15 @@ func UpdateCourseGoogle(w http.ResponseWriter, r *http.Request) {
 	if price, ok := updates["price"].(float64); ok {
 		course.Price = price
 	}
+	if tags, ok := updates["tags"].([]interface{}); ok {
+		var tagStrings []string
+		for _, tag := range tags {
+			if tagStr, ok := tag.(string); ok {
+				tagStrings = append(tagStrings, tagStr)
+			}
+		}
+		course.Tags = tagStrings
+	}
 
 	// Сохраняем обновления
 	if err := config.DB.Save(&course).Error; err != nil {

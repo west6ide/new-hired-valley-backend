@@ -27,28 +27,32 @@ func PersonalizedRecommendationsHandler(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	// Получение данных пользователя
+	// Получение данных пользователя с предзагрузкой навыков и интересов
 	var user users.User
-	if err := config.DB.First(&user, claims.UserID).Error; err != nil {
+	if err := config.DB.Preload("Skills").Preload("Interests").First(&user, claims.UserID).Error; err != nil {
 		http.Error(w, "User not found", http.StatusNotFound)
 		return
 	}
 
+	// Преобразование навыков и интересов в []string
+	skills := convertSkillsToStrings(user.Skills)
+	interests := convertInterestsToStrings(user.Interests)
+
 	// Ищем курсы, соответствующие интересам пользователя
 	var matchedCourses []courses.Course
-	if err := config.DB.Where("tags && ?", user.Interests).Find(&matchedCourses).Error; err != nil {
+	if err := config.DB.Where("tags && ?", interests).Find(&matchedCourses).Error; err != nil {
 		http.Error(w, "Failed to fetch courses", http.StatusInternalServerError)
 		return
 	}
 
 	// Ищем контент, соответствующий интересам пользователя
 	var matchedContent []content.Content
-	if err := config.DB.Where("tags && ?", user.Interests).Find(&matchedContent).Error; err != nil {
+	if err := config.DB.Where("tags && ?", interests).Find(&matchedContent).Error; err != nil {
 		http.Error(w, "Failed to fetch content", http.StatusInternalServerError)
 		return
 	}
 
-	// Подключаем AI для улучшения рекомендаций
+	// Подготовка запроса к AI
 	apiKey := os.Getenv("AIML_API_KEY")
 	if apiKey == "" {
 		http.Error(w, "AI API key is missing", http.StatusInternalServerError)
@@ -56,19 +60,14 @@ func PersonalizedRecommendationsHandler(w http.ResponseWriter, r *http.Request) 
 	}
 
 	aiRequestBody := map[string]interface{}{
-		"model": "gpt-4-turbo", // Укажите подходящую модель
-		"profile": map[string]interface{}{
-			"industry":  user.Industry,
-			"skills":    user.Skills,
-			"interests": user.Interests,
+		"model": "gpt-4-turbo-2024-04-09",
+		"messages": []map[string]string{
+			{"role": "system", "content": "You are an AI assistant helping recommend personalized courses and content."},
+			{"role": "user", "content": fmt.Sprintf("The user works in %s, has skills in %s, and is interested in %s. Provide them personalized recommendations for courses and content based on these details.", user.Industry, strings.Join(skills, ", "), strings.Join(interests, ", "))},
 		},
-		"existing_recommendations": map[string]interface{}{
-			"courses": matchedCourses,
-			"content": matchedContent,
-		},
+		"max_tokens": 1000,
 	}
 
-	// Отправляем запрос в AI
 	aiResponse, err := callAIMLAPI(apiKey, aiRequestBody)
 	if err != nil {
 		http.Error(w, "Failed to fetch AI recommendations: "+err.Error(), http.StatusInternalServerError)
@@ -125,4 +124,20 @@ func callAIMLAPI(apiKey string, requestBody map[string]interface{}) (map[string]
 	}
 
 	return response, nil
+}
+
+func convertSkillsToStrings(skills []users.Skill) []string {
+	var skillStrings []string
+	for _, skill := range skills {
+		skillStrings = append(skillStrings, skill.Name)
+	}
+	return skillStrings
+}
+
+func convertInterestsToStrings(interests []users.Interest) []string {
+	var interestStrings []string
+	for _, interest := range interests {
+		interestStrings = append(interestStrings, interest.Name)
+	}
+	return interestStrings
 }

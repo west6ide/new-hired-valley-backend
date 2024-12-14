@@ -64,10 +64,10 @@ func PersonalizedRecommendationsHandler(w http.ResponseWriter, r *http.Request) 
 	aiRequestBody := map[string]interface{}{
 		"model": "gpt-4-turbo-2024-04-09",
 		"messages": []map[string]string{
-			{"role": "system", "content": "You are an AI assistant helping recommend personalized courses and content."},
-			{"role": "user", "content": fmt.Sprintf("The user works in %s, has skills in %s, and is interested in %s. Provide them personalized recommendations for courses and content based on these details.", user.Industry, strings.Join(skills, ", "), strings.Join(interests, ", "))},
+			{"role": "system", "content": "You are an AI assistant recommending courses and content."},
+			{"role": "user", "content": fmt.Sprintf("User's industry: %s. Skills: %s. Interests: %s. Recommend suitable courses and content.", user.Industry, strings.Join(skills, ", "), strings.Join(interests, ", "))},
 		},
-		"max_tokens": 1000,
+		"max_tokens": 500,
 	}
 
 	aiResponse, err := callAIMLAPI(apiKey, aiRequestBody)

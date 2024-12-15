@@ -22,32 +22,32 @@ func PersonalizedRecommendationsHandler(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	// Проверяем токен
+	// Проверка токена
 	claims, err := authentication.ValidateToken(r)
 	if err != nil {
 		http.Error(w, "Unauthorized: "+err.Error(), http.StatusUnauthorized)
 		return
 	}
 
-	// Получаем данные пользователя с предзагрузкой навыков и интересов
+	// Получение данных пользователя
 	var user users.User
 	if err := config.DB.Preload("Skills").Preload("Interests").First(&user, claims.UserID).Error; err != nil {
 		http.Error(w, "User not found", http.StatusNotFound)
 		return
 	}
 
-	// Конвертируем навыки и интересы в массив строк
+	// Конвертация навыков и интересов в массив строк
 	skills := extractSkillNames(user.Skills)
 	interests := extractInterestNames(user.Interests)
 
-	// Получаем курсы, контент и менторов из базы данных
+	// Выборка данных из базы
 	matchedCourses, matchedContent, matchedMentors, err := fetchDataFromDatabase(interests, skills)
 	if err != nil {
 		http.Error(w, "Failed to fetch data: "+err.Error(), http.StatusInternalServerError)
 		return
 	}
 
-	// Подготовка данных для отправки в AI API
+	// Подготовка данных для AI
 	apiKey := os.Getenv("AIML_API_KEY")
 	if apiKey == "" {
 		http.Error(w, "AI API key is missing", http.StatusInternalServerError)
@@ -66,7 +66,7 @@ func PersonalizedRecommendationsHandler(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	// Формируем итоговый ответ
+	// Формирование ответа
 	response := map[string]interface{}{
 		"personalized_courses": matchedCourses,
 		"personalized_content": matchedContent,
@@ -78,7 +78,7 @@ func PersonalizedRecommendationsHandler(w http.ResponseWriter, r *http.Request) 
 	json.NewEncoder(w).Encode(response)
 }
 
-// fetchDataFromDatabase - выборка данных из базы на основе интересов и навыков
+// fetchDataFromDatabase - выборка данных из базы
 func fetchDataFromDatabase(interests, skills []string) ([]courses.Course, []content.Content, []users.User, error) {
 	var matchedCourses []courses.Course
 	if err := config.DB.Where("tags && ?", pq.Array(interests)).Find(&matchedCourses).Error; err != nil {
@@ -104,20 +104,22 @@ func fetchDataFromDatabase(interests, skills []string) ([]courses.Course, []cont
 	return matchedCourses, matchedContent, matchedMentors, nil
 }
 
-// prepareAIRequest - подготовка тела запроса для AI API
+// prepareAIRequest - подготовка данных для AI
 func prepareAIRequest(user users.User, courses []courses.Course, content []content.Content, mentors []users.User, skills, interests []string) map[string]interface{} {
-	coursesList := summarizeTitles(courses)
-	contentList := summarizeTitles(content)
-	mentorsList := summarizeNames(mentors)
+	coursesList := truncateString(summarizeTitles(courses), 80)
+	contentList := truncateString(summarizeTitles(content), 80)
+	mentorsList := truncateString(summarizeNames(mentors), 80)
+
+	userSummary := truncateString(fmt.Sprintf(
+		"The user works in %s, has skills in %s, and is interested in %s.",
+		user.Industry, strings.Join(skills, ", "), strings.Join(interests, ", "),
+	), 100)
 
 	return map[string]interface{}{
 		"model": "gpt-4-turbo-2024-04-09",
 		"messages": []map[string]string{
 			{"role": "system", "content": "You are an AI assistant specializing in personalized recommendations."},
-			{"role": "user", "content": fmt.Sprintf(
-				"The user works in %s, has skills in %s, and is interested in %s. Based on this, recommend relevant courses, content, and mentors.",
-				user.Industry, strings.Join(skills, ", "), strings.Join(interests, ", "),
-			)},
+			{"role": "user", "content": userSummary},
 			{"role": "user", "content": fmt.Sprintf("Relevant Courses: %s.", coursesList)},
 			{"role": "user", "content": fmt.Sprintf("Relevant Content: %s.", contentList)},
 			{"role": "user", "content": fmt.Sprintf("Relevant Mentors: %s.", mentorsList)},
@@ -126,7 +128,7 @@ func prepareAIRequest(user users.User, courses []courses.Course, content []conte
 	}
 }
 
-// callAIMLAPI - отправка запроса к AI API
+// callAIMLAPI - вызов AI API
 func callAIMLAPI(apiKey string, requestBody map[string]interface{}) (map[string]interface{}, error) {
 	url := "https://api.aimlapi.com/chat/completions"
 	requestJSON, _ := json.Marshal(requestBody)
@@ -176,14 +178,21 @@ func validateRequestSize(request map[string]interface{}) error {
 	return nil
 }
 
-// Вспомогательные функции для извлечения данных
+// Вспомогательные функции
+func truncateString(input string, maxLength int) string {
+	if len(input) > maxLength {
+		return input[:maxLength] + "..."
+	}
+	return input
+}
+
 func summarizeTitles(items interface{}) string {
 	switch v := items.(type) {
 	case []courses.Course:
 		var titles []string
 		for i, item := range v {
 			titles = append(titles, item.Title)
-			if i >= 2 { // Ограничиваем вывод 3 элементами
+			if i >= 2 {
 				break
 			}
 		}
@@ -192,7 +201,7 @@ func summarizeTitles(items interface{}) string {
 		var titles []string
 		for i, item := range v {
 			titles = append(titles, item.Title)
-			if i >= 2 { // Ограничиваем вывод 3 элементами
+			if i >= 2 {
 				break
 			}
 		}
@@ -206,7 +215,7 @@ func summarizeNames(mentors []users.User) string {
 	var names []string
 	for i, mentor := range mentors {
 		names = append(names, mentor.Name)
-		if i >= 2 { // Ограничиваем вывод 3 элементами
+		if i >= 2 {
 			break
 		}
 	}

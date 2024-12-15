@@ -11,11 +11,8 @@ import (
 	"net/http"
 	"os"
 	"strings"
-
-	"github.com/lib/pq"
 )
 
-// PersonalizedRecommendationsHandler - обработчик для персонализированных рекомендаций
 func PersonalizedRecommendationsHandler(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
@@ -36,25 +33,25 @@ func PersonalizedRecommendationsHandler(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	// Преобразование навыков и интересов в []string
+	// Преобразуем навыки и интересы в массив строк
 	skills := convertSkillsToStrings(user.Skills)
 	interests := convertInterestsToStrings(user.Interests)
 
 	// Ищем курсы, соответствующие интересам пользователя
 	var matchedCourses []courses.Course
-	if err := config.DB.Where("tags && ?", pq.Array(interests)).Find(&matchedCourses).Error; err != nil {
+	if err := config.DB.Where("tags && ?", interests).Find(&matchedCourses).Error; err != nil {
 		http.Error(w, "Failed to fetch courses", http.StatusInternalServerError)
 		return
 	}
 
 	// Ищем контент, соответствующий интересам пользователя
 	var matchedContent []content.Content
-	if err := config.DB.Where("tags && ?", pq.Array(interests)).Find(&matchedContent).Error; err != nil {
+	if err := config.DB.Where("tags && ?", interests).Find(&matchedContent).Error; err != nil {
 		http.Error(w, "Failed to fetch content", http.StatusInternalServerError)
 		return
 	}
 
-	// Подготовка запроса к AI
+	// Подготовка запроса для AI
 	apiKey := os.Getenv("AIML_API_KEY")
 	if apiKey == "" {
 		http.Error(w, "AI API key is missing", http.StatusInternalServerError)
@@ -64,12 +61,14 @@ func PersonalizedRecommendationsHandler(w http.ResponseWriter, r *http.Request) 
 	aiRequestBody := map[string]interface{}{
 		"model": "gpt-4-turbo-2024-04-09",
 		"messages": []map[string]string{
-			{"role": "system", "content": "You are an AI assistant recommending courses and content."},
-			{"role": "user", "content": fmt.Sprintf("User's industry: %s. Skills: %s. Interests: %s. Recommend suitable courses and content.", user.Industry, strings.Join(skills, ", "), strings.Join(interests, ", "))},
+			{"role": "system", "content": "You are an AI assistant recommending courses and content based on user preferences."},
+			{"role": "user", "content": fmt.Sprintf("The user works in %s, has skills in %s, and is interested in %s. Recommend personalized courses and content.", user.Industry, strings.Join(skills, ", "), strings.Join(interests, ", "))},
 		},
-		"max_tokens": 500,
+		"max_tokens":  500, // Ограничиваем длину ответа
+		"temperature": 0.7,
 	}
 
+	// Отправляем запрос в AI
 	aiResponse, err := callAIMLAPI(apiKey, aiRequestBody)
 	if err != nil {
 		http.Error(w, "Failed to fetch AI recommendations: "+err.Error(), http.StatusInternalServerError)
@@ -78,7 +77,6 @@ func PersonalizedRecommendationsHandler(w http.ResponseWriter, r *http.Request) 
 
 	// Формируем итоговый ответ
 	response := map[string]interface{}{
-		"status":               "success",
 		"personalized_courses": matchedCourses,
 		"personalized_content": matchedContent,
 		"ai_suggestions":       aiResponse,
@@ -88,14 +86,11 @@ func PersonalizedRecommendationsHandler(w http.ResponseWriter, r *http.Request) 
 	json.NewEncoder(w).Encode(response)
 }
 
-// callAIMLAPI - отправка запроса к AIML API
+// Функция для вызова AIML API
 func callAIMLAPI(apiKey string, requestBody map[string]interface{}) (map[string]interface{}, error) {
 	url := "https://api.aimlapi.com/chat/completions"
 
-	// Отладочная информация для запроса
 	requestJSON, _ := json.Marshal(requestBody)
-	fmt.Printf("Request Body: %s\n", string(requestJSON))
-
 	req, err := http.NewRequest("POST", url, strings.NewReader(string(requestJSON)))
 	if err != nil {
 		return nil, fmt.Errorf("failed to create request: %v", err)
@@ -113,7 +108,6 @@ func callAIMLAPI(apiKey string, requestBody map[string]interface{}) (map[string]
 	if resp.StatusCode != http.StatusOK {
 		var errorResponse map[string]interface{}
 		json.NewDecoder(resp.Body).Decode(&errorResponse)
-		fmt.Printf("Error Response: %+v\n", errorResponse)
 		return nil, fmt.Errorf("API error: %v, Status: %d", errorResponse, resp.StatusCode)
 	}
 
@@ -125,7 +119,7 @@ func callAIMLAPI(apiKey string, requestBody map[string]interface{}) (map[string]
 	return response, nil
 }
 
-// convertSkillsToStrings - преобразование навыков в []string
+// Конвертация навыков в массив строк
 func convertSkillsToStrings(skills []users.Skill) []string {
 	var skillStrings []string
 	for _, skill := range skills {
@@ -134,7 +128,7 @@ func convertSkillsToStrings(skills []users.Skill) []string {
 	return skillStrings
 }
 
-// convertInterestsToStrings - преобразование интересов в []string
+// Конвертация интересов в массив строк
 func convertInterestsToStrings(interests []users.Interest) []string {
 	var interestStrings []string
 	for _, interest := range interests {

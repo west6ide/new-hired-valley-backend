@@ -60,18 +60,22 @@ func PersonalizedRecommendationsHandler(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	// Подготовка запроса к AI
+	// Подготовка запроса к AI с сокращённым содержимым
 	apiKey := os.Getenv("AIML_API_KEY")
 	if apiKey == "" {
 		http.Error(w, "AI API key is missing", http.StatusInternalServerError)
 		return
 	}
 
+	// Сокращаем данные для API
+	skillsSummary := strings.Join(skills, ", ")
+	interestsSummary := strings.Join(interests, ", ")
+
 	aiRequestBody := map[string]interface{}{
 		"model": "gpt-4-turbo-2024-04-09",
 		"messages": []map[string]string{
-			{"role": "system", "content": "You are an AI assistant helping recommend personalized courses and content."},
-			{"role": "user", "content": fmt.Sprintf("The user works in %s, has skills in %s, and is interested in %s. Provide them personalized recommendations for courses and content based on these details.", user.Industry, strings.Join(skills, ", "), strings.Join(interests, ", "))},
+			{"role": "system", "content": "You are an AI assistant recommending courses and content based on user profiles."},
+			{"role": "user", "content": fmt.Sprintf("The user has skills in %s and interests in %s. Recommend personalized courses and content.", skillsSummary, interestsSummary)},
 		},
 		"max_tokens": 500,
 	}

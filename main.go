@@ -7,6 +7,7 @@ import (
 	"hired-valley-backend/controllers/careers"
 	"hired-valley-backend/controllers/contentsControl"
 	"hired-valley-backend/controllers/course"
+	"hired-valley-backend/controllers/mentors"
 	"hired-valley-backend/controllers/recommendations"
 	"hired-valley-backend/controllers/stories"
 	"hired-valley-backend/models/career"
@@ -50,6 +51,9 @@ func main() {
 		&recommend.Recommendation{},
 		&career.PlanCareer{},
 		&content.Content{},
+		&users.MentorProfile{},
+		&users.Slot{},
+		&users.NotificationMentor{},
 	)
 	if err != nil {
 		log.Fatalf("Ошибка миграции базы данных: %v", err)
@@ -86,6 +90,10 @@ func main() {
 	//users profile endpoints
 	http.HandleFunc("/profile/update", authentication.UpdateProfile)
 	http.HandleFunc("/users/search", authentication.SearchUsers)
+
+	http.HandleFunc("/mentors", mentors.MentorsHandler)
+	http.HandleFunc("/mentors/book", mentors.BookSlotHandler)
+	http.HandleFunc("/notifications", mentors.NotificationsHandler)
 
 	http.HandleFunc("/upload/content", contentsControl.UploadContent)
 	http.HandleFunc("/list/content", contentsControl.ListContent)

@@ -72,6 +72,7 @@ func PersonalizedRecommendationsHandler(w http.ResponseWriter, r *http.Request) 
 		"personalized_content": matchedContent,
 		"personalized_mentors": matchedMentors,
 		"ai_suggestions":       aiResponse,
+		"motivational_message": "Your potential is limitless. With the right knowledge and guidance, you can achieve your dreams. Keep going—you’re closer than you think!",
 	}
 
 	w.Header().Set("Content-Type", "application/json")

@@ -54,7 +54,7 @@ func PersonalizedRecommendationsHandler(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	aiRequestBody := prepareAIRequest(user, matchedCourses, matchedContent, matchedMentors, skills, interests)
+	aiRequestBody := prepareAIRequest(user, skills, interests, matchedCourses, matchedContent, matchedMentors)
 	aiResponse, err := callAIMLAPI(apiKey, aiRequestBody)
 	if err != nil {
 		http.Error(w, "Failed to fetch AI recommendations: "+err.Error(), http.StatusInternalServerError)
@@ -86,7 +86,13 @@ func fetchDataFromDatabase(interests, skills []string) ([]courses.Course, []cont
 	}
 
 	var matchedMentors []users.User
-	if err := config.DB.Where("role = ?", "mentor").Where("skills && ?", pq.Array(skills)).Find(&matchedMentors).Error; err != nil {
+	if err := config.DB.
+		Joins("JOIN user_skills ON users.id = user_skills.user_id").
+		Joins("JOIN skills ON skills.id = user_skills.skill_id").
+		Where("skills.name IN ?", skills).
+		Where("users.role = ?", "mentor").
+		Group("users.id").
+		Find(&matchedMentors).Error; err != nil {
 		return nil, nil, nil, fmt.Errorf("failed to fetch mentors: %v", err)
 	}
 
@@ -94,7 +100,7 @@ func fetchDataFromDatabase(interests, skills []string) ([]courses.Course, []cont
 }
 
 // prepareAIRequest - подготовка тела запроса для AI API
-func prepareAIRequest(user users.User, courses []courses.Course, content []content.Content, mentors []users.User, skills, interests []string) map[string]interface{} {
+func prepareAIRequest(user users.User, skills, interests []string, courses []courses.Course, content []content.Content, mentors []users.User) map[string]interface{} {
 	coursesList := extractCourseTitles(courses)
 	contentList := extractContentTitles(content)
 	mentorsList := extractMentorNames(mentors)

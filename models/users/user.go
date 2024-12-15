@@ -31,13 +31,11 @@ type User struct {
 }
 
 type Skill struct {
-	ID     uint   `gorm:"primaryKey"`
-	Name   string `gorm:"unique;not null"`
-	UserID uint   `json:"user_id"` // Связь с пользователем
+	ID   uint   `gorm:"primaryKey"`
+	Name string `gorm:"unique;not null"`
 }
 
 type Interest struct {
-	ID     uint   `gorm:"primaryKey"`
-	Name   string `gorm:"unique;not null"`
-	UserID uint   `json:"user_id"` // Связь с пользователем
+	ID   uint   `gorm:"primaryKey"`
+	Name string `gorm:"unique;not null"`
 }

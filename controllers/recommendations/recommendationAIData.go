@@ -37,8 +37,8 @@ func PersonalizedRecommendationsHandler(w http.ResponseWriter, r *http.Request) 
 	}
 
 	// Конвертируем навыки и интересы в массив строк
-	skills := convertSkillsToStrings(user.Skills)
-	interests := convertInterestsToStrings(user.Interests)
+	skills := extractSkillNames(user.Skills)
+	interests := extractInterestNames(user.Interests)
 
 	// Получаем курсы, контент и менторов из базы данных
 	matchedCourses, matchedContent, matchedMentors, err := fetchDataFromDatabase(interests, skills)
@@ -54,7 +54,12 @@ func PersonalizedRecommendationsHandler(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	aiRequestBody := prepareAIRequest(user, skills, interests, matchedCourses, matchedContent, matchedMentors)
+	aiRequestBody := prepareAIRequest(user, matchedCourses, matchedContent, matchedMentors, skills, interests)
+	if err := validateRequestSize(aiRequestBody); err != nil {
+		http.Error(w, "Request size exceeds limit: "+err.Error(), http.StatusBadRequest)
+		return
+	}
+
 	aiResponse, err := callAIMLAPI(apiKey, aiRequestBody)
 	if err != nil {
 		http.Error(w, "Failed to fetch AI recommendations: "+err.Error(), http.StatusInternalServerError)
@@ -100,21 +105,24 @@ func fetchDataFromDatabase(interests, skills []string) ([]courses.Course, []cont
 }
 
 // prepareAIRequest - подготовка тела запроса для AI API
-func prepareAIRequest(user users.User, skills, interests []string, courses []courses.Course, content []content.Content, mentors []users.User) map[string]interface{} {
-	coursesList := extractCourseTitles(courses)
-	contentList := extractContentTitles(content)
-	mentorsList := extractMentorNames(mentors)
+func prepareAIRequest(user users.User, courses []courses.Course, content []content.Content, mentors []users.User, skills, interests []string) map[string]interface{} {
+	coursesList := summarizeTitles(courses)
+	contentList := summarizeTitles(content)
+	mentorsList := summarizeNames(mentors)
 
 	return map[string]interface{}{
 		"model": "gpt-4-turbo-2024-04-09",
 		"messages": []map[string]string{
 			{"role": "system", "content": "You are an AI assistant specializing in personalized recommendations."},
 			{"role": "user", "content": fmt.Sprintf(
-				"The user works in %s, has skills in %s, and is interested in %s. Based on this, and the following data:\n\nCourses: %s\nContent: %s\nMentors: %s\n\nProvide enhanced recommendations.",
-				user.Industry, strings.Join(skills, ", "), strings.Join(interests, ", "), coursesList, contentList, mentorsList,
+				"The user works in %s, has skills in %s, and is interested in %s. Based on this, recommend relevant courses, content, and mentors.",
+				user.Industry, strings.Join(skills, ", "), strings.Join(interests, ", "),
 			)},
+			{"role": "user", "content": fmt.Sprintf("Relevant Courses: %s.", coursesList)},
+			{"role": "user", "content": fmt.Sprintf("Relevant Content: %s.", contentList)},
+			{"role": "user", "content": fmt.Sprintf("Relevant Mentors: %s.", mentorsList)},
 		},
-		"max_tokens": 1000,
+		"max_tokens": 500,
 	}
 }
 
@@ -151,32 +159,61 @@ func callAIMLAPI(apiKey string, requestBody map[string]interface{}) (map[string]
 	return response, nil
 }
 
+// validateRequestSize - проверка размера запроса
+func validateRequestSize(request map[string]interface{}) error {
+	messages, ok := request["messages"].([]map[string]string)
+	if !ok {
+		return fmt.Errorf("invalid messages format")
+	}
+
+	totalLength := 0
+	for _, msg := range messages {
+		totalLength += len(msg["content"])
+		if totalLength > 256 {
+			return fmt.Errorf("messages array exceeds 256 characters")
+		}
+	}
+	return nil
+}
+
 // Вспомогательные функции для извлечения данных
-func extractCourseTitles(courses []courses.Course) string {
-	var titles []string
-	for _, course := range courses {
-		titles = append(titles, course.Title)
+func summarizeTitles(items interface{}) string {
+	switch v := items.(type) {
+	case []courses.Course:
+		var titles []string
+		for i, item := range v {
+			titles = append(titles, item.Title)
+			if i >= 2 { // Ограничиваем вывод 3 элементами
+				break
+			}
+		}
+		return strings.Join(titles, ", ")
+	case []content.Content:
+		var titles []string
+		for i, item := range v {
+			titles = append(titles, item.Title)
+			if i >= 2 { // Ограничиваем вывод 3 элементами
+				break
+			}
+		}
+		return strings.Join(titles, ", ")
+	default:
+		return ""
 	}
-	return strings.Join(titles, ", ")
 }
 
-func extractContentTitles(contents []content.Content) string {
-	var titles []string
-	for _, item := range contents {
-		titles = append(titles, item.Title)
-	}
-	return strings.Join(titles, ", ")
-}
-
-func extractMentorNames(mentors []users.User) string {
+func summarizeNames(mentors []users.User) string {
 	var names []string
-	for _, mentor := range mentors {
+	for i, mentor := range mentors {
 		names = append(names, mentor.Name)
+		if i >= 2 { // Ограничиваем вывод 3 элементами
+			break
+		}
 	}
 	return strings.Join(names, ", ")
 }
 
-func convertSkillsToStrings(skills []users.Skill) []string {
+func extractSkillNames(skills []users.Skill) []string {
 	var skillStrings []string
 	for _, skill := range skills {
 		skillStrings = append(skillStrings, skill.Name)
@@ -184,7 +221,7 @@ func convertSkillsToStrings(skills []users.Skill) []string {
 	return skillStrings
 }
 
-func convertInterestsToStrings(interests []users.Interest) []string {
+func extractInterestNames(interests []users.Interest) []string {
 	var interestStrings []string
 	for _, interest := range interests {
 		interestStrings = append(interestStrings, interest.Name)

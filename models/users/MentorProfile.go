@@ -15,14 +15,14 @@ type MentorProfile struct {
 }
 
 type Slot struct {
-	ID        uint `gorm:"primaryKey"`
-	MentorID  uint `gorm:"index"`
-	UserID    uint `gorm:"index;default:null"` // ID пользователя, который забронировал слот
-	StartTime time.Time
-	EndTime   time.Time
-	IsBooked  bool
-	CreatedAt time.Time
-	User      User `gorm:"foreignKey:UserID"` // Связь с пользователем
+	ID        uint      `gorm:"primaryKey" json:"id"`
+	MentorID  uint      `gorm:"not null" json:"mentor_id"`
+	UserID    *uint     `gorm:"default:null" json:"user_id"` // ID пользователя, который забронировал слот
+	StartTime time.Time `gorm:"not null" json:"start_time"`
+	EndTime   time.Time `gorm:"not null" json:"end_time"`
+	IsBooked  bool      `gorm:"default:false" json:"is_booked"`
+	CreatedAt time.Time `json:"created_at"`
+	User      User      `gorm:"foreignKey:UserID" json:"user"` // Связь с пользователем
 }
 
 type NotificationMentor struct {

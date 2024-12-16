@@ -105,7 +105,7 @@ func Login(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(map[string]string{"token": tokenString})
 }
 
-func ValidateToken(r *http.Request) (*Claims, error) {
+func ValidateToken(r *http.Request) (*users.User, error) {
 	authHeader := r.Header.Get("Authorization")
 	if authHeader == "" {
 		return nil, errors.New("missing authorization header")
@@ -120,13 +120,14 @@ func ValidateToken(r *http.Request) (*Claims, error) {
 		return nil, errors.New("invalid token")
 	}
 
+	// Получаем пользователя из базы данных
 	var user users.User
 	if err := config.DB.Where("id = ? AND access_token = ?", claims.UserID, tokenString).First(&user).Error; err != nil {
 		return nil, errors.New("access token mismatch")
 	}
 
-	fmt.Printf("Token validated with userID: %d\n", claims.UserID)
-	return claims, nil
+	fmt.Printf("Token validated with userID: %d\n", user.ID)
+	return &user, nil // Возвращаем полную модель пользователя
 }
 
 func generateToken(userID uint, email, role string) (string, error) {

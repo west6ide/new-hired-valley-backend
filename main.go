@@ -93,6 +93,7 @@ func main() {
 
 	http.HandleFunc("/mentors", mentors.MentorsHandler)
 	http.HandleFunc("/mentors/book", mentors.BookSlotHandler)
+	http.HandleFunc("/mentors/booked-slots", mentors.MentorBookedSlotsHandler)
 	http.HandleFunc("/notifications", mentors.NotificationsHandler)
 
 	http.HandleFunc("/upload/content", contentsControl.UploadContent)

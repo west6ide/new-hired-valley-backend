@@ -31,7 +31,7 @@ func PersonalizedRecommendationsHandler(w http.ResponseWriter, r *http.Request) 
 
 	// Получение данных пользователя
 	var user users.User
-	if err := config.DB.Preload("Skills").Preload("Interests").First(&user, claims.UserID).Error; err != nil {
+	if err := config.DB.Preload("Skills").Preload("Interests").First(&user, claims.ID).Error; err != nil {
 		http.Error(w, "User not found", http.StatusNotFound)
 		return
 	}

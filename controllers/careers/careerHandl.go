@@ -50,7 +50,7 @@ func GenerateCareerPlanHandler(w http.ResponseWriter, r *http.Request) {
 
 	// Сохранение плана в базе данных
 	careerPlan := career.PlanCareer{
-		UserID:         claims.UserID,
+		UserID:         claims.ID,
 		ShortTermGoals: req.ShortTermGoals,
 		LongTermGoals:  req.LongTermGoals,
 		Steps:          plan,

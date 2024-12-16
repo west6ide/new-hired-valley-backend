@@ -90,7 +90,7 @@ func CreateLesson(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	lesson.InstructorID = claims.UserID
+	lesson.InstructorID = claims.ID
 	if err := config.DB.Create(&lesson).Error; err != nil {
 		http.Error(w, "Failed to create lesson", http.StatusInternalServerError)
 		return
@@ -127,7 +127,7 @@ func UpdateLesson(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if lesson.InstructorID != claims.UserID {
+	if lesson.InstructorID != claims.ID {
 		http.Error(w, "Permission denied", http.StatusForbidden)
 		return
 	}
@@ -172,7 +172,7 @@ func DeleteLesson(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if lesson.InstructorID != claims.UserID {
+	if lesson.InstructorID != claims.ID {
 		http.Error(w, "Permission denied", http.StatusForbidden)
 		return
 	}

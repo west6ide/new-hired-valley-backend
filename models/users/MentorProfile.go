@@ -17,10 +17,12 @@ type MentorProfile struct {
 type Slot struct {
 	ID        uint `gorm:"primaryKey"`
 	MentorID  uint `gorm:"index"`
+	UserID    uint `gorm:"index;default:null"` // ID пользователя, который забронировал слот
 	StartTime time.Time
 	EndTime   time.Time
 	IsBooked  bool
 	CreatedAt time.Time
+	User      User `gorm:"foreignKey:UserID"` // Связь с пользователем
 }
 
 type NotificationMentor struct {

@@ -197,7 +197,7 @@ func DeleteContent(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if content.AuthorID != claims.UserID {
+	if content.AuthorID != claims.ID {
 		http.Error(w, "Permission denied", http.StatusForbidden)
 		return
 	}

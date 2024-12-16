@@ -30,12 +30,19 @@ func MentorsHandler(w http.ResponseWriter, r *http.Request) {
 		}
 
 		mentorProfile.UserID = user.UserID
-		config.DB.Create(&mentorProfile)
+		if err := config.DB.Create(&mentorProfile).Error; err != nil {
+			http.Error(w, "Error creating mentor profile", http.StatusInternalServerError)
+			return
+		}
+
+		// Preload User data
+		config.DB.Preload("User").First(&mentorProfile, mentorProfile.ID)
+
 		w.Header().Set("Content-Type", "application/json")
 		json.NewEncoder(w).Encode(mentorProfile)
 	} else if r.Method == http.MethodGet {
 		var mentors []users.MentorProfile
-		query := config.DB.Preload("User")
+		query := config.DB.Preload("User") // Preload related User data
 		skills := r.URL.Query().Get("skills")
 		if skills != "" {
 			query = query.Where("skills LIKE ?", fmt.Sprintf("%%%s%%", skills))
@@ -45,7 +52,11 @@ func MentorsHandler(w http.ResponseWriter, r *http.Request) {
 			price, _ := strconv.ParseFloat(priceRange, 64)
 			query = query.Where("price_per_hour <= ?", price)
 		}
-		query.Find(&mentors)
+		if err := query.Find(&mentors).Error; err != nil {
+			http.Error(w, "Error fetching mentors", http.StatusInternalServerError)
+			return
+		}
+
 		w.Header().Set("Content-Type", "application/json")
 		json.NewEncoder(w).Encode(mentors)
 	} else {

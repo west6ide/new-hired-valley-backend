@@ -4,12 +4,19 @@ import (
 	"encoding/json"
 	"fmt"
 	"hired-valley-backend/config"
+	"hired-valley-backend/controllers/authentication"
 	"hired-valley-backend/models/users"
 	"net/http"
 	"strconv"
 )
 
 func MentorsHandler(w http.ResponseWriter, r *http.Request) {
+	user, err := authentication.ValidateToken(r)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusUnauthorized)
+		return
+	}
+
 	if r.Method == http.MethodPost {
 		var mentorProfile users.MentorProfile
 		if err := json.NewDecoder(r.Body).Decode(&mentorProfile); err != nil {
@@ -17,14 +24,12 @@ func MentorsHandler(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		var user users.User
-		config.DB.First(&user, mentorProfile.UserID)
-		if user.ID == 0 || user.Role != "mentor" {
+		if user.Role != "mentor" {
 			http.Error(w, "User is not authorized to create a mentor profile", http.StatusForbidden)
 			return
 		}
 
-		mentorProfile.UserID = user.ID
+		mentorProfile.UserID = user.UserID
 		config.DB.Create(&mentorProfile)
 		w.Header().Set("Content-Type", "application/json")
 		json.NewEncoder(w).Encode(mentorProfile)
@@ -49,6 +54,12 @@ func MentorsHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func BookSlotHandler(w http.ResponseWriter, r *http.Request) {
+	user, err := authentication.ValidateToken(r)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusUnauthorized)
+		return
+	}
+
 	if r.Method != http.MethodPost {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		return
@@ -57,6 +68,11 @@ func BookSlotHandler(w http.ResponseWriter, r *http.Request) {
 	var slot users.Slot
 	if err := json.NewDecoder(r.Body).Decode(&slot); err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	if user.Role != "mentor" {
+		http.Error(w, "User is not authorized to book slots", http.StatusForbidden)
 		return
 	}
 
@@ -75,6 +91,12 @@ func BookSlotHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func NotificationsHandler(w http.ResponseWriter, r *http.Request) {
+	_, err := authentication.ValidateToken(r)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusUnauthorized)
+		return
+	}
+
 	if r.Method != http.MethodPost {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		return

@@ -64,6 +64,54 @@ func MentorsHandler(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+func CreateSlotHandler(w http.ResponseWriter, r *http.Request) {
+	// Проверка метода запроса
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	// Валидация токена и получение данных пользователя
+	user, err := authentication.ValidateToken(r)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusUnauthorized)
+		return
+	}
+
+	// Проверка, что пользователь имеет роль "mentor"
+	if user.Role != "mentor" {
+		http.Error(w, "Only mentors can create slots", http.StatusForbidden)
+		return
+	}
+
+	// Декодирование данных слота из тела запроса
+	var slot users.Slot
+	if err := json.NewDecoder(r.Body).Decode(&slot); err != nil {
+		http.Error(w, "Invalid input", http.StatusBadRequest)
+		return
+	}
+
+	// Привязка MentorID к текущему пользователю
+	slot.MentorID = user.ID
+
+	// Проверка на существующие слоты в то же время
+	var existingSlot users.Slot
+	if err := config.DB.Where("mentor_id = ? AND start_time = ? AND end_time = ?", slot.MentorID, slot.StartTime, slot.EndTime).First(&existingSlot).Error; err == nil {
+		http.Error(w, "Slot already exists for this time range", http.StatusConflict)
+		return
+	}
+
+	// Сохранение слота в базе данных
+	if err := config.DB.Create(&slot).Error; err != nil {
+		http.Error(w, "Error creating slot", http.StatusInternalServerError)
+		return
+	}
+
+	// Возвращаем успешный ответ
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(slot)
+}
+
 func BookSlotHandler(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)

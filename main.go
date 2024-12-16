@@ -92,6 +92,7 @@ func main() {
 	http.HandleFunc("/users/search", authentication.SearchUsers)
 
 	http.HandleFunc("/mentors", mentors.MentorsHandler)
+	http.HandleFunc("/mentors/slots/create", mentors.CreateSlotHandler)
 	http.HandleFunc("/mentors/book", mentors.BookSlotHandler)
 	http.HandleFunc("/mentors/booked-slots", mentors.MentorBookedSlotsHandler)
 	http.HandleFunc("/notifications", mentors.NotificationsHandler)

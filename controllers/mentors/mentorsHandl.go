@@ -84,6 +84,13 @@ func CreateSlotHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Проверка на существование профиля ментора
+	var mentorProfile users.MentorProfile
+	if err := config.DB.First(&mentorProfile, "user_id = ?", user.ID).Error; err != nil {
+		http.Error(w, "Mentor profile not found. Create a mentor profile first.", http.StatusBadRequest)
+		return
+	}
+
 	// Декодирование данных слота из тела запроса
 	var slot users.Slot
 	if err := json.NewDecoder(r.Body).Decode(&slot); err != nil {
@@ -91,8 +98,8 @@ func CreateSlotHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Привязка MentorID к текущему пользователю
-	slot.MentorID = user.ID
+	// Привязка MentorID из профиля ментора
+	slot.MentorID = mentorProfile.ID
 
 	// Проверка на существующие слоты в то же время
 	var existingSlot users.Slot

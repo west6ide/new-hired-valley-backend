@@ -173,7 +173,7 @@ func BookSlotHandler(w http.ResponseWriter, r *http.Request) {
 
 	// Заполнение данных о слоте
 	slot.IsBooked = true
-	slot.UserID = user.ID // Сохраняем ID пользователя, который забронировал слот
+	slot.UserID = &user.ID // Сохраняем ID пользователя, который забронировал слот
 	if err := config.DB.Create(&slot).Error; err != nil {
 		fmt.Printf("Error creating slot: %v\n", err)
 		http.Error(w, "Error booking slot", http.StatusInternalServerError)

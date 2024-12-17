@@ -17,7 +17,7 @@ type MentorProfile struct {
 type Slot struct {
 	ID        uint      `gorm:"primaryKey" json:"id"`
 	MentorID  uint      `gorm:"not null" json:"mentor_id"`
-	UserID    uint      `gorm:"default:null" json:"user_id"`
+	UserID    *uint     `gorm:"default:null" json:"user_id"`
 	StartTime time.Time `gorm:"not null" json:"start_time"`
 	EndTime   time.Time `gorm:"not null" json:"end_time"`
 	IsBooked  bool      `gorm:"default:false" json:"is_booked"`

@@ -19,40 +19,58 @@ func MentorsHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if r.Method == http.MethodPost {
+		// Создаем новый профиль ментора
 		var mentorProfile users.MentorProfile
 		if err := json.NewDecoder(r.Body).Decode(&mentorProfile); err != nil {
-			http.Error(w, err.Error(), http.StatusBadRequest)
+			http.Error(w, "Invalid request body", http.StatusBadRequest)
 			return
 		}
 
+		// Проверяем роль пользователя
 		if user.Role != "mentor" {
 			http.Error(w, "User is not authorized to create a mentor profile", http.StatusForbidden)
 			return
 		}
 
+		// Присваиваем user.ID в поле id и user_id
+		mentorProfile.ID = user.ID // Записываем user.ID в поле id
 		mentorProfile.UserID = user.ID
+
+		// Создаем профиль ментора в базе данных
 		if err := config.DB.Create(&mentorProfile).Error; err != nil {
 			http.Error(w, "Error creating mentor profile", http.StatusInternalServerError)
 			return
 		}
 
-		// Preload User data
-		config.DB.Preload("User").First(&mentorProfile, mentorProfile.ID)
+		// Прелоадим данные пользователя для ответа
+		if err := config.DB.Preload("User").First(&mentorProfile, mentorProfile.ID).Error; err != nil {
+			http.Error(w, "Error fetching created mentor profile", http.StatusInternalServerError)
+			return
+		}
 
+		// Возвращаем успешный ответ
 		w.Header().Set("Content-Type", "application/json")
 		json.NewEncoder(w).Encode(mentorProfile)
+
 	} else if r.Method == http.MethodGet {
+		// Обработчик GET-запроса для получения списка менторов
 		var mentors []users.MentorProfile
 		query := config.DB.Preload("User")
+
+		// Фильтрация по навыкам
 		skills := r.URL.Query().Get("skills")
 		if skills != "" {
 			query = query.Where("skills LIKE ?", fmt.Sprintf("%%%s%%", skills))
 		}
+
+		// Фильтрация по цене
 		priceRange := r.URL.Query().Get("price_range")
 		if priceRange != "" {
 			price, _ := strconv.ParseFloat(priceRange, 64)
 			query = query.Where("price_per_hour <= ?", price)
 		}
+
+		// Получаем список менторов
 		if err := query.Find(&mentors).Error; err != nil {
 			http.Error(w, "Error fetching mentors", http.StatusInternalServerError)
 			return
@@ -60,6 +78,7 @@ func MentorsHandler(w http.ResponseWriter, r *http.Request) {
 
 		w.Header().Set("Content-Type", "application/json")
 		json.NewEncoder(w).Encode(mentors)
+
 	} else {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 	}

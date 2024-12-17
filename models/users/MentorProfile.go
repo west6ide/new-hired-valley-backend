@@ -3,7 +3,7 @@ package users
 import "time"
 
 type MentorProfile struct {
-	ID             uint `gorm:"primaryKey"`
+	ID             uint `gorm:"primaryKey;autoIncrement:false"` // Отключаем автоинкремент
 	UserID         uint `gorm:"index;unique"`
 	User           User `gorm:"constraint:OnDelete:CASCADE;"`
 	Bio            string
